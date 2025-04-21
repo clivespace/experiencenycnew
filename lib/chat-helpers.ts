@@ -1,4 +1,5 @@
 import { type Message } from 'ai';
+import { googleSearch } from './utils';
 
 export interface RestaurantRecommendation {
   name: string;
@@ -28,7 +29,71 @@ function validateRestaurantData(data: Partial<RestaurantRecommendation>): data i
   );
 }
 
-export function parseRestaurantData(content: string): RestaurantRecommendation | null {
+// New function to search for real restaurant images
+export async function findRestaurantImages(restaurantName: string, location: string): Promise<string[]> {
+  try {
+    console.log(`Searching for images of ${restaurantName} in ${location}...`);
+    
+    // Create specific search queries for different aspects of the restaurant
+    const interiorQuery = `${restaurantName} ${location} restaurant interior photos`;
+    const foodQuery = `${restaurantName} ${location} food dishes photos`;
+    const exteriorQuery = `${restaurantName} ${location} restaurant exterior building`;
+    
+    // Execute the searches
+    const [interiorResults, foodResults, exteriorResults] = await Promise.all([
+      googleSearch(interiorQuery),
+      googleSearch(foodQuery),
+      googleSearch(exteriorQuery)
+    ]);
+    
+    const images: string[] = [];
+    
+    // Helper function to extract image URLs from search results
+    const extractImageUrl = (results: any) => {
+      if (!results.results || results.results.length === 0) return null;
+      
+      // Look for image links in results (typically ending with image extensions or from image sites)
+      for (const result of results.results) {
+        const link = result.link;
+        // Check if it's an image URL or from an image hosting site
+        if (
+          link.match(/\.(jpg|jpeg|png|webp|avif)(\?.*)?$/i) ||
+          link.includes('images') ||
+          link.includes('photos') ||
+          link.includes('media') ||
+          link.includes('unsplash') ||
+          link.includes('pexels') ||
+          link.includes('shutterstock') ||
+          link.includes('cloudfront') ||
+          link.includes('googleusercontent')
+        ) {
+          return link;
+        }
+      }
+      
+      // If no clear image URL, take the first result as it might lead to an image
+      return results.results[0]?.link || null;
+    };
+    
+    // Extract one image from each search result
+    const interiorImage = extractImageUrl(interiorResults);
+    const foodImage = extractImageUrl(foodResults);
+    const exteriorImage = extractImageUrl(exteriorResults);
+    
+    // Add the found images to our collection
+    if (interiorImage) images.push(interiorImage);
+    if (foodImage) images.push(foodImage);
+    if (exteriorImage) images.push(exteriorImage);
+    
+    console.log(`Found ${images.length} real images for ${restaurantName}`);
+    return images;
+  } catch (error) {
+    console.error('Error finding restaurant images:', error);
+    return [];
+  }
+}
+
+export async function parseRestaurantData(content: string): Promise<RestaurantRecommendation | null> {
   try {
     console.log('Attempting to parse restaurant data from content length:', content.length);
     
@@ -106,6 +171,31 @@ export function parseRestaurantData(content: string): RestaurantRecommendation |
       
       // Process the provided images if any
       let processedImages = data.images || [];
+      
+      // First check if we have actual images from the AI
+      const hasRealImages = Array.isArray(processedImages) && 
+                           processedImages.length > 0 && 
+                           processedImages.every(img => 
+                             img && typeof img === 'string' && 
+                             img.startsWith('http') && 
+                             !img.includes('placeholder') &&
+                             !img.includes('example'));
+      
+      // Try to get real images for the restaurant
+      if (!hasRealImages && typeof window === 'undefined') {
+        try {
+          console.log(`Looking for real images for ${data.name}...`);
+          const realImages = await findRestaurantImages(data.name, data.location);
+          
+          if (realImages.length > 0) {
+            console.log(`Found ${realImages.length} real images for ${data.name}, using them instead of placeholders`);
+            processedImages = realImages;
+          }
+        } catch (error) {
+          console.error('Error getting real restaurant images:', error);
+          // Fall back to defaults (which happens below)
+        }
+      }
       
       // Validate each image URL
       processedImages = processedImages.map(img => {

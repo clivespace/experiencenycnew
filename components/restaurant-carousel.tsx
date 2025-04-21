@@ -3,45 +3,51 @@
 import { useRef, useState, useEffect } from "react"
 import { ChevronRight, ChevronLeft } from "lucide-react"
 import RestaurantCard from "./restaurant-card"
-import { RESTAURANT_QUERIES } from "@/lib/unsplash"
+import { type Restaurant, enhanceRestaurantsWithRealImages } from "@/lib/restaurant-helpers"
 
-// Sample restaurant data with Unsplash images
-const restaurants = [
+// Sample restaurant data with placeholder images
+const initialRestaurants: Restaurant[] = [
   {
     id: 1,
     name: "Le Bernardin",
     image: "https://images.unsplash.com/photo-1578474846511-04ba529f0b88?w=300&h=180&fit=crop",
     description: "Upscale French seafood restaurant with elegant atmosphere and impeccable service.",
+    location: "Midtown, Manhattan"
   },
   {
     id: 2,
     name: "Eleven Madison Park",
     image: "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=300&h=180&fit=crop",
     description: "Sophisticated tasting menus featuring seasonal ingredients in an art deco space.",
+    location: "Flatiron, Manhattan"
   },
   {
     id: 3,
     name: "Gramercy Tavern",
     image: "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=300&h=180&fit=crop",
     description: "Seasonal American cuisine in a rustic, elegant setting with exceptional service.",
+    location: "Gramercy, Manhattan"
   },
   {
     id: 4,
     name: "Per Se",
     image: "https://images.unsplash.com/photo-1592861956120-e524fc739696?w=300&h=180&fit=crop",
     description: "Chef Thomas Keller's New American restaurant offering prix fixe menus with city views.",
+    location: "Columbus Circle, Manhattan"
   },
   {
     id: 5,
     name: "Daniel",
     image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=300&h=180&fit=crop",
     description: "Refined French cuisine served in an elegant setting with exceptional attention to detail.",
+    location: "Upper East Side, Manhattan"
   },
   {
     id: 6,
     name: "Masa",
     image: "https://images.unsplash.com/photo-1579027989536-b7b1f875659b?w=300&h=180&fit=crop",
     description: "Exclusive sushi experience with Chef Masa Takayama's omakase menu.",
+    location: "Columbus Circle, Manhattan"
   },
 ]
 
@@ -50,6 +56,37 @@ export default function RestaurantCarousel() {
   const [showLeftArrow, setShowLeftArrow] = useState(false)
   const [showRightArrow, setShowRightArrow] = useState(true)
   const [isScrolling, setIsScrolling] = useState(false)
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(initialRestaurants)
+
+  // Function to fetch real images for restaurants
+  useEffect(() => {
+    // This will only run on the server during SSR
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    // Only run this effect once on the client
+    const fetchRealImages = async () => {
+      try {
+        console.log('Fetching real restaurant images...');
+        const response = await fetch('/api/restaurant-images');
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.restaurants && Array.isArray(data.restaurants)) {
+            console.log('Got enhanced restaurants with real images:', data.restaurants.length);
+            setRestaurants(data.restaurants);
+          }
+        } else {
+          console.error('Failed to fetch real restaurant images:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching real restaurant images:', error);
+      }
+    };
+    
+    fetchRealImages();
+  }, []);
 
   // Function to check scroll position and update arrow visibility
   const checkScrollPosition = () => {

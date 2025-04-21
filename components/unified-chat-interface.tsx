@@ -39,8 +39,8 @@ function hasRecommendation(message: ProcessedMessage): message is ProcessedMessa
 }
 
 export default function UnifiedChatInterface({ initialHeight = "400px", onReset }: UnifiedChatInterfaceProps) {
-  // Replace useChat with our own state management
   const [messages, setMessages] = useState<Message[]>([]);
+  const [processedMessages, setProcessedMessages] = useState<ProcessedMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -148,43 +148,63 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
   const [currentHeight, setCurrentHeight] = useState(initialHeight)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
-  // Process each message to extract restaurant data if present
-  const processedMessages = messages.map((message: Message): ProcessedMessage => {
-    if (message.role === 'assistant') {
-      // Log the raw message content for debugging
-      console.log('Processing assistant message:', message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''));
-      
-      // First, check if there's a JSON object in the message
-      const jsonMatch = message.content.match(/\{[\s\S]*\}/);
-      let cleanedContent = message.content;
-      
-      // If there's a JSON object, remove it from the content
-      if (jsonMatch) {
-        // Remove the JSON object (and any formatted display of it)
-        cleanedContent = message.content.replace(/```json\s*\{[\s\S]*\}\s*```/g, '')  // Remove markdown code blocks
-                                       .replace(/\{[\s\S]*\}/g, '')                 // Remove raw JSON
-                                       .replace(/\n\s*\n/g, '\n')                    // Remove double newlines
-                                       .trim();
-      }
-      
-      const restaurantData = parseRestaurantData(message.content);
-      if (restaurantData) {
-        console.log('Restaurant data parsed successfully:', restaurantData.name);
-        return {
+  // Process messages when they change
+  useEffect(() => {
+    const newProcessedMessages = messages.map((message: Message): ProcessedMessage => {
+      if (message.role === 'assistant') {
+        // Log the raw message content for debugging
+        console.log('Processing assistant message:', message.content.substring(0, 100) + (message.content.length > 100 ? '...' : ''));
+        
+        // First, check if there's a JSON object in the message
+        const jsonMatch = message.content.match(/\{[\s\S]*\}/);
+        let cleanedContent = message.content;
+        
+        // If there's a JSON object, remove it from the content
+        if (jsonMatch) {
+          // Remove the JSON object (and any formatted display of it)
+          cleanedContent = message.content.replace(/```json\s*\{[\s\S]*\}\s*```/g, '')  // Remove markdown code blocks
+                                         .replace(/\{[\s\S]*\}/g, '')                 // Remove raw JSON
+                                         .replace(/\n\s*\n/g, '\n')                    // Remove double newlines
+                                         .trim();
+        }
+        
+        // Create an initial message without restaurant data
+        const initialProcessedMessage: ProcessedMessage = {
           ...message,
-          content: cleanedContent, // Use cleaned content without JSON
-          restaurantRecommendation: restaurantData
+          content: cleanedContent
         };
+        
+        // Try to parse restaurant data asynchronously
+        (async () => {
+          try {
+            const restaurantData = await parseRestaurantData(message.content);
+            if (restaurantData) {
+              console.log('Restaurant data parsed successfully:', restaurantData.name);
+              // Update the processed messages with restaurant data
+              setProcessedMessages(prevProcessedMessages => {
+                return prevProcessedMessages.map(msg => {
+                  if (msg.id === message.id) {
+                    return {
+                      ...msg,
+                      restaurantRecommendation: restaurantData
+                    };
+                  }
+                  return msg;
+                });
+              });
+            }
+          } catch (error) {
+            console.error('Error parsing restaurant data:', error);
+          }
+        })();
+        
+        return initialProcessedMessage;
       }
-      
-      // Even if no restaurant data was found, return cleaned content
-      return {
-        ...message,
-        content: cleanedContent
-      };
-    }
-    return message;
-  });
+      return message;
+    });
+    
+    setProcessedMessages(newProcessedMessages);
+  }, [messages]);
 
   // Log when messages are updated for debugging
   useEffect(() => {
@@ -246,12 +266,26 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
     
     // Simulate assistant response after 1 second
     setTimeout(() => {
+      const testRestaurantJson = `{
+        "name": "Bella Napoli Trattoria",
+        "type": "Restaurant",
+        "cuisine": "Italian",
+        "location": "Midtown, Manhattan",
+        "priceRange": "$$$",
+        "rating": 4.7,
+        "openHours": "Mon-Sun: 11:00 AM - 11:00 PM",
+        "description": "Authentic Italian cuisine in a cozy, rustic setting with handmade pasta and wood-fired pizzas. Known for their traditional recipes and extensive Italian wine selection.",
+        "images": [],
+        "website": "https://www.bellanapoli-nyc.com"
+      }`;
+      
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: "This is a test response to verify the height and width expansion behavior. The interface should expand to 135% width and 150% height after this message appears.",
+        content: `I recommend Bella Napoli Trattoria, a fantastic Italian restaurant in Midtown. They're known for their handmade pasta and authentic flavors. ${testRestaurantJson}`,
         role: 'assistant',
         createdAt: new Date()
       };
+      
       setMessages(prev => [...prev, assistantMessage]);
     }, 1000);
     
