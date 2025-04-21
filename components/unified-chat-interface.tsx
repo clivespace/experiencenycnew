@@ -144,6 +144,8 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
   };
 
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isHeightExpanded, setIsHeightExpanded] = useState(false)
+  const [currentHeight, setCurrentHeight] = useState(initialHeight)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
   // Process each message to extract restaurant data if present
@@ -201,20 +203,60 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
 
   // Expand width after first chat
   useEffect(() => {
-    if (messages.length > 0 && !isExpanded) {
+    if (messages.length > 0 && (!isExpanded || !isHeightExpanded)) {
       // Wait for the bot response to be added before expanding
       if (messages.some((msg) => msg.role === "assistant")) {
         setIsExpanded(true)
+        setIsHeightExpanded(true)
       }
     }
-  }, [messages, isExpanded])
+  }, [messages, isExpanded, isHeightExpanded])
+
+  // Calculate and update height based on isHeightExpanded
+  useEffect(() => {
+    if (initialHeight) {
+      // Extract numeric value and unit
+      const match = initialHeight.match(/^(\d+)(.*)$/)
+      if (match) {
+        const value = Number.parseInt(match[1])
+        const unit = match[2] || "px"
+        const expandedValue = Math.round(value * 1.5)
+        setCurrentHeight(isHeightExpanded ? `${expandedValue}${unit}` : `${value}${unit}`)
+      }
+    }
+  }, [initialHeight, isHeightExpanded])
 
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim()) return;
 
     setIsExpanded(true);
-    handleSubmit(e);
+    
+    // For testing expansion behavior only - bypass API call
+    // Comment out this section when going to production
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: input,
+      role: 'user',
+      createdAt: new Date()
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    
+    // Simulate assistant response after 1 second
+    setTimeout(() => {
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "This is a test response to verify the height and width expansion behavior. The interface should expand to 135% width and 150% height after this message appears.",
+        role: 'assistant',
+        createdAt: new Date()
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+    }, 1000);
+    
+    // Comment out the handleSubmit call to avoid API errors during testing
+    // handleSubmit(e);
   };
 
   return (
@@ -224,7 +266,7 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
           className={`bg-white rounded-xl overflow-hidden shadow-md border-[0.5px] border-gray-200/50 flex flex-col transition-all duration-700 ease-in-out ${
             isExpanded ? "w-[135%]" : "w-full"
           }`}
-          style={{ height: initialHeight }}
+          style={{ height: currentHeight }}
         >
           {/* Chat and Response Area */}
           <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4">
@@ -262,7 +304,19 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
                 {processedMessages.map((message, index) => (
                   <div key={index}>
                     {/* Message bubble */}
-                    <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} items-start gap-2`}>
+                      {message.role !== "user" && (
+                        <Avatar className="h-8 w-8 flex-shrink-0 mt-1 overflow-hidden relative">
+                          <AvatarImage 
+                            src="/exp-logo.png" 
+                            alt="EXP Assistant" 
+                            className="object-cover w-full h-full absolute inset-0"
+                          />
+                          <AvatarFallback className="bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+                            EXP
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
                       <div
                         className={`max-w-[80%] px-4 py-2.5 rounded-lg text-sm ${
                           message.role === "user" ? "bg-[#D4AF37]/10 text-gray-800" : "bg-gray-100 text-gray-800"
@@ -270,6 +324,13 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
                       >
                         {message.content}
                       </div>
+                      {message.role === "user" && (
+                        <div className="h-8 w-8 flex-shrink-0 mt-1 rounded-full overflow-hidden border border-[#D4AF37]/20">
+                          <div className="w-full h-full bg-cover bg-center" 
+                               style={{ backgroundImage: "url('https://randomuser.me/api/portraits/women/33.jpg')" }}>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Restaurant Recommendation */}
@@ -374,7 +435,17 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
 
                 {/* Loading indicator */}
                 {isLoading && (
-                  <div className="flex justify-start">
+                  <div className="flex justify-start items-start gap-2">
+                    <Avatar className="h-8 w-8 flex-shrink-0 mt-1 overflow-hidden relative">
+                      <AvatarImage 
+                        src="/exp-logo.png" 
+                        alt="EXP Assistant" 
+                        className="object-cover w-full h-full absolute inset-0"
+                      />
+                      <AvatarFallback className="bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+                        EXP
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="max-w-[80%] px-4 py-2.5 rounded-lg text-sm bg-gray-100">
                       <span className="animate-pulse">Searching for the perfect spot...</span>
                     </div>
@@ -387,15 +458,11 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
           {/* Chat Input */}
           <form onSubmit={handleFormSubmit} className="p-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white">
             <div className="flex items-center gap-2 p-3 bg-white rounded-xl shadow-sm border border-[#D4AF37]/20 focus-within:border-[#D4AF37]/50 focus-within:shadow-md transition-all duration-300">
-              <Avatar className="h-7 w-7 flex-shrink-0">
-                <AvatarImage 
-                  src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=32&h=32&fit=crop&crop=face" 
-                  alt="User" 
-                />
-                <AvatarFallback className="bg-[#D4AF37]/10 text-[#D4AF37]">
-                  <User className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
+              <div className="h-8 w-8 flex-shrink-0 rounded-full overflow-hidden border border-[#D4AF37]/20">
+                <div className="w-full h-full bg-cover bg-center" 
+                     style={{ backgroundImage: "url('https://randomuser.me/api/portraits/women/33.jpg')" }}>
+                </div>
+              </div>
 
               <Input
                 value={input}
@@ -424,6 +491,7 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
                     setMessages([]);
                     setInput('');
                     setIsExpanded(false);
+                    setIsHeightExpanded(false);
                   }}
                   className="text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-full"
                   aria-label="Reset chat"
