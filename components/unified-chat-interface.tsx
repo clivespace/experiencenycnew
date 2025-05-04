@@ -457,15 +457,27 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
         })
       });
       
-      if (!response.ok) {
-        throw new Error(`API responded with status ${response.status}`);
-      }
-      
       // Parse the response
       const data = await response.json();
       
       // Log for debugging
       console.log('API response:', data);
+      
+      if (!response.ok) {
+        // Handle API error with proper error message
+        const errorContent = data.content || `Error: ${data.error || 'Unknown error'}`;
+        
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          content: errorContent,
+          role: 'assistant',
+          createdAt: new Date()
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
+        console.error('API error:', data.error);
+        return;
+      }
       
       // Process the response
       if (Array.isArray(data) && data.length > 0) {
@@ -492,11 +504,30 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
         setMessages(prev => [...prev, assistantMessage]);
       } else {
         console.error('Unexpected response format:', data);
+        
+        // Add a friendly error message for the user
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          content: "I'm sorry, I couldn't process your request at the moment. Please try again in a few seconds.",
+          role: 'assistant',
+          createdAt: new Date()
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
       }
       
     } catch (error) {
       console.error('Error sending message:', error);
-      // You could add error handling UI here
+      
+      // Add a user-friendly error message
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        content: "I'm sorry, I couldn't process your request at the moment. Please try again in a few seconds.",
+        role: 'assistant',
+        createdAt: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
