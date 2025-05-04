@@ -10,42 +10,66 @@ const initialRestaurants: Restaurant[] = [
   {
     id: 1,
     name: "Le Bernardin",
-    image: "https://images.unsplash.com/photo-1578474846511-04ba529f0b88?w=300&h=180&fit=crop",
+    cuisine: "French",
+    address: "155 W 51st St",
+    rating: 4.8,
+    priceRange: "$$$",
+    images: ["/images/placeholder-restaurant.jpg"],
     description: "Upscale French seafood restaurant with elegant atmosphere and impeccable service.",
     location: "Midtown, Manhattan"
   },
   {
     id: 2,
     name: "Eleven Madison Park",
-    image: "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=300&h=180&fit=crop",
+    cuisine: "American",
+    address: "11 Madison Ave",
+    rating: 4.9,
+    priceRange: "$$$$",
+    images: ["/images/placeholder-restaurant.jpg"],
     description: "Sophisticated tasting menus featuring seasonal ingredients in an art deco space.",
     location: "Flatiron, Manhattan"
   },
   {
     id: 3,
     name: "Gramercy Tavern",
-    image: "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=300&h=180&fit=crop",
+    cuisine: "American",
+    address: "42 E 20th St",
+    rating: 4.7,
+    priceRange: "$$$",
+    images: ["/images/placeholder-restaurant.jpg"],
     description: "Seasonal American cuisine in a rustic, elegant setting with exceptional service.",
     location: "Gramercy, Manhattan"
   },
   {
     id: 4,
     name: "Per Se",
-    image: "https://images.unsplash.com/photo-1592861956120-e524fc739696?w=300&h=180&fit=crop",
+    cuisine: "French",
+    address: "10 Columbus Circle",
+    rating: 4.8,
+    priceRange: "$$$$",
+    images: ["/images/placeholder-restaurant.jpg"],
     description: "Chef Thomas Keller's New American restaurant offering prix fixe menus with city views.",
     location: "Columbus Circle, Manhattan"
   },
   {
     id: 5,
     name: "Daniel",
-    image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=300&h=180&fit=crop",
+    cuisine: "French",
+    address: "60 E 65th St",
+    rating: 4.8,
+    priceRange: "$$$$",
+    images: ["/images/placeholder-restaurant.jpg"],
     description: "Refined French cuisine served in an elegant setting with exceptional attention to detail.",
     location: "Upper East Side, Manhattan"
   },
   {
     id: 6,
     name: "Masa",
-    image: "https://images.unsplash.com/photo-1579027989536-b7b1f875659b?w=300&h=180&fit=crop",
+    cuisine: "Japanese",
+    address: "10 Columbus Circle",
+    rating: 4.9,
+    priceRange: "$$$$",
+    images: ["/images/placeholder-restaurant.jpg"],
     description: "Exclusive sushi experience with Chef Masa Takayama's omakase menu.",
     location: "Columbus Circle, Manhattan"
   },
@@ -73,9 +97,17 @@ export default function RestaurantCarousel() {
         
         if (response.ok) {
           const data = await response.json();
-          if (data.restaurants && Array.isArray(data.restaurants)) {
-            console.log('Got enhanced restaurants with real images:', data.restaurants.length);
+          
+          // The API now returns the array directly, not inside a "restaurants" object
+          if (Array.isArray(data)) {
+            console.log('Got enhanced restaurants with real images:', data.length);
+            setRestaurants(data);
+          } else if (data.restaurants && Array.isArray(data.restaurants)) {
+            // Fallback for backward compatibility
+            console.log('Got enhanced restaurants with real images (legacy format):', data.restaurants.length);
             setRestaurants(data.restaurants);
+          } else {
+            console.error('Invalid restaurant data format:', data);
           }
         } else {
           console.error('Failed to fetch real restaurant images:', response.statusText);
@@ -153,7 +185,11 @@ export default function RestaurantCarousel() {
         >
           {restaurants.map((restaurant) => (
             <div key={restaurant.id} className="snap-start">
-              <RestaurantCard name={restaurant.name} image={restaurant.image} description={restaurant.description} />
+              <RestaurantCard 
+                name={restaurant.name} 
+                image={restaurant.images?.[0] || restaurant.image} 
+                description={restaurant.description || ''} 
+              />
             </div>
           ))}
         </div>

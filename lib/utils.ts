@@ -1,9 +1,24 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { z } from 'zod';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+// Default Google Search API configuration
+// In production, use environment variables instead of hardcoded values
+const GOOGLE_SEARCH_API_KEY = process.env.GOOGLE_SEARCH_API_KEY || 'AIzaSyDwstlEMfnItV34_h-nLO-GMSKN9vtwbL8';
+const GOOGLE_SEARCH_ENGINE_ID = process.env.GOOGLE_SEARCH_ENGINE_ID || '764bbc3a489a34eb6';
+
+// Schema for Google Search API response
+const GoogleSearchResultSchema = z.object({
+  title: z.string(),
+  link: z.string(),
+  snippet: z.string(),
+});
+
+export type GoogleSearchResult = z.infer<typeof GoogleSearchResultSchema>;
 
 /**
  * Test function for the Google Search API
@@ -11,14 +26,12 @@ export function cn(...inputs: ClassValue[]) {
  */
 export async function testGoogleSearch() {
   console.log('=== Testing Google Search API ===');
-  const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-  const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
   
-  console.log('API Key present:', !!apiKey);
-  console.log('API Key prefix:', apiKey?.substring(0, 10) + '...');
-  console.log('Search Engine ID:', searchEngineId);
+  console.log('API Key present:', !!GOOGLE_SEARCH_API_KEY);
+  console.log('API Key prefix:', GOOGLE_SEARCH_API_KEY?.substring(0, 10) + '...');
+  console.log('Search Engine ID:', GOOGLE_SEARCH_ENGINE_ID);
   
-  if (!apiKey || !searchEngineId) {
+  if (!GOOGLE_SEARCH_API_KEY || !GOOGLE_SEARCH_ENGINE_ID) {
     console.error('❌ Missing configuration');
     return { success: false, error: 'Missing configuration' };
   }
@@ -28,17 +41,17 @@ export async function testGoogleSearch() {
     const testQuery = 'best restaurant NYC';
     console.log('Making test search for:', testQuery);
     
-    const result = await googleSearch(testQuery);
+    const results = await googleSearch(testQuery);
     
-    if (result.error) {
-      console.error('❌ Search failed:', result.error);
-      return { success: false, error: result.error };
+    if (!Array.isArray(results)) {
+      console.error('❌ Search failed: Unexpected result type');
+      return { success: false, error: 'Unexpected result type' };
     }
     
-    if (result.results && result.results.length > 0) {
-      console.log('✅ Search successful:', result.results.length, 'results found');
-      console.log('First result:', result.results[0]?.title);
-      return { success: true, resultCount: result.results.length };
+    if (results.length > 0) {
+      console.log('✅ Search successful:', results.length, 'results found');
+      console.log('First result:', results[0]?.title);
+      return { success: true, resultCount: results.length };
     } else {
       console.log('⚠️ Search returned no results');
       return { success: true, resultCount: 0 };
@@ -57,81 +70,81 @@ export async function testGoogleSearch() {
  * @param query Search query
  * @returns Array of search results with titles, links, and snippets
  */
-export async function googleSearch(query: string) {
+export async function googleSearch(query: string): Promise<GoogleSearchResult[]> {
   try {
     const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
     const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
-    
-    console.log('Google Search Configuration:');
-    console.log('- API Key present:', !!apiKey);
-    console.log('- Search Engine ID:', searchEngineId);
-    
+
     if (!apiKey || !searchEngineId) {
-      console.error('Google Search API key or Search Engine ID not configured');
-      return { 
-        error: 'Search configuration missing',
-        results: []
-      };
+      console.error('Missing Google Search API configuration');
+      return [];
     }
-    
-    // Build the search URL - try the main Google Search API endpoint
-    const url = new URL('https://www.googleapis.com/customsearch/v1');
-    url.searchParams.append('key', apiKey);
-    url.searchParams.append('cx', searchEngineId);
-    url.searchParams.append('q', query);
-    
-    console.log('Making Google Search request:', query);
-    console.log('Request URL:', url.toString().replace(apiKey, '[REDACTED]'));
-    
-    // Make the request
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      }
-    });
-    
-    console.log('Search response status:', response.status, response.statusText);
-    
+
+    const response = await fetch(
+      `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(query)}`
+    );
+
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Google Search API error:', JSON.stringify(errorData, null, 2));
-      
-      // Extract more specific error information if available
-      const errorMessage = errorData.error?.message || `${response.status} ${response.statusText}`;
-      const errorReason = errorData.error?.errors?.[0]?.reason || 'unknown';
-      const errorDetails = errorData.error?.errors?.[0]?.message || '';
-      
-      console.error(`Google Search API error details - Reason: ${errorReason}, Message: ${errorMessage}`);
-      
-      return { 
-        error: `Search failed: ${errorMessage} (${errorReason})`,
-        errorDetails: errorData,
-        results: []
-      };
+      throw new Error(`Google Search API responded with status ${response.status}`);
     }
-    
+
     const data = await response.json();
-    console.log('Search results received:', data.searchInformation?.totalResults || 'unknown', 'total results');
     
-    // Format the results
-    const formattedResults = data.items?.map((item: any) => ({
+    // Validate and parse the search results
+    const results = data.items?.map((item: any) => ({
       title: item.title,
       link: item.link,
       snippet: item.snippet,
-      source: item.displayLink
     })) || [];
-    
-    console.log('Formatted', formattedResults.length, 'search results');
-    
-    return {
-      results: formattedResults
-    };
+
+    return results;
   } catch (error) {
-    console.error('Error in Google search:', error);
-    return { 
-      error: error instanceof Error ? error.message : 'Unknown search error',
-      results: []
-    };
+    console.error('Error performing Google search:', error);
+    return [];
   }
+}
+
+/**
+ * Utility for retrying failed API requests with exponential backoff
+ */
+
+/**
+ * Retries a function with exponential backoff on failure
+ * @param fn The async function to retry
+ * @param maxRetries Maximum number of retries
+ * @param baseDelay Initial delay in ms before first retry
+ * @returns Result of the function or throws the last error
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (isRateLimitError(error)) {
+        const delay = baseDelay * Math.pow(2, i);
+        console.log(`Rate limited, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
+ * Checks if an error is due to rate limiting (429)
+ */
+export function isRateLimitError(error: any): boolean {
+  return error?.status === 429 || 
+         error?.message?.includes('429') || 
+         error?.message?.includes('rate limit');
 }

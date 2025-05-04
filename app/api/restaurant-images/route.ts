@@ -1,89 +1,104 @@
 import { NextResponse } from 'next/server';
-import { enhanceRestaurantsWithRealImages, type Restaurant } from '@/lib/restaurant-helpers';
+import { enhanceRestaurantsWithRealImages, findRestaurantImages } from '@/lib/restaurant-helpers';
 
-// Initial restaurant data - same as in the carousel component
+// Import the Restaurant type from helpers to ensure consistency
+import type { Restaurant } from '@/lib/restaurant-helpers';
+
+// Initial restaurant data with placeholder images
 const initialRestaurants: Restaurant[] = [
   {
-    id: 1,
-    name: "Le Bernardin",
-    image: "https://images.unsplash.com/photo-1578474846511-04ba529f0b88?w=300&h=180&fit=crop",
-    description: "Upscale French seafood restaurant with elegant atmosphere and impeccable service.",
-    location: "Midtown, Manhattan"
+    id: '1',
+    name: 'Le Bernardin',
+    cuisine: 'French',
+    priceRange: '$$$',
+    neighborhood: 'Midtown',
+    description: 'Upscale French seafood restaurant with elegant atmosphere',
+    rating: 4.8,
+    imageUrl: '/images/placeholder-restaurant.jpg',
+    image: '/images/placeholder-restaurant.jpg',
+    address: '155 W 51st St, New York, NY 10019'
   },
   {
-    id: 2,
-    name: "Eleven Madison Park",
-    image: "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=300&h=180&fit=crop",
-    description: "Sophisticated tasting menus featuring seasonal ingredients in an art deco space.",
-    location: "Flatiron, Manhattan"
+    id: '2',
+    name: 'Katz\'s Delicatessen',
+    cuisine: 'Deli',
+    priceRange: '$$',
+    neighborhood: 'Lower East Side',
+    description: 'Famous deli known for pastrami sandwiches',
+    rating: 4.6,
+    imageUrl: '/images/placeholder-restaurant.jpg',
+    image: '/images/placeholder-restaurant.jpg',
+    address: '205 E Houston St, New York, NY 10002'
   },
   {
-    id: 3,
-    name: "Gramercy Tavern",
-    image: "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=300&h=180&fit=crop",
-    description: "Seasonal American cuisine in a rustic, elegant setting with exceptional service.",
-    location: "Gramercy, Manhattan"
+    id: '3',
+    name: 'Carbone',
+    cuisine: 'Italian',
+    priceRange: '$$$',
+    neighborhood: 'Greenwich Village',
+    description: 'Upscale Italian-American restaurant with retro vibes',
+    rating: 4.7,
+    imageUrl: '/images/placeholder-restaurant.jpg',
+    image: '/images/placeholder-restaurant.jpg',
+    address: '181 Thompson St, New York, NY 10012'
   },
   {
-    id: 4,
-    name: "Per Se",
-    image: "https://images.unsplash.com/photo-1592861956120-e524fc739696?w=300&h=180&fit=crop",
-    description: "Chef Thomas Keller's New American restaurant offering prix fixe menus with city views.",
-    location: "Columbus Circle, Manhattan"
+    id: '4',
+    name: 'Peter Luger',
+    cuisine: 'Steakhouse',
+    priceRange: '$$$',
+    neighborhood: 'Williamsburg',
+    description: 'Iconic steakhouse serving dry-aged beef since 1887',
+    rating: 4.5,
+    imageUrl: '/images/placeholder-restaurant.jpg',
+    image: '/images/placeholder-restaurant.jpg',
+    address: '178 Broadway, Brooklyn, NY 11211'
   },
   {
-    id: 5,
-    name: "Daniel",
-    image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=300&h=180&fit=crop",
-    description: "Refined French cuisine served in an elegant setting with exceptional attention to detail.",
-    location: "Upper East Side, Manhattan"
-  },
-  {
-    id: 6,
-    name: "Masa",
-    image: "https://images.unsplash.com/photo-1579027989536-b7b1f875659b?w=300&h=180&fit=crop",
-    description: "Exclusive sushi experience with Chef Masa Takayama's omakase menu.",
-    location: "Columbus Circle, Manhattan"
-  },
+    id: '5',
+    name: 'Cosme',
+    cuisine: 'Mexican',
+    priceRange: '$$$',
+    neighborhood: 'Flatiron District',
+    description: 'Modern Mexican restaurant with creative dishes',
+    rating: 4.6,
+    imageUrl: 'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c',
+    image: 'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c',
+    address: '35 E 21st St, New York, NY 10010'
+  }
 ];
 
-// Cache the results to avoid making multiple API calls
+// Cache for enhanced restaurants to avoid redundant API calls
 let cachedRestaurants: Restaurant[] | null = null;
-let lastUpdated = 0;
-const CACHE_TTL = 3600000; // 1 hour in milliseconds
+let lastCachedTime: number = 0;
+const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
 
 export async function GET() {
+  // Check if we have a fresh cached result
+  const now = Date.now();
+  if (cachedRestaurants && (now - lastCachedTime < CACHE_TTL)) {
+    console.log('Returning cached restaurant data with real images');
+    return NextResponse.json(cachedRestaurants);
+  }
+
   try {
-    const now = Date.now();
+    console.log('Fetching restaurant data for carousel...');
     
-    // Check if cache is valid
-    if (cachedRestaurants && lastUpdated > now - CACHE_TTL) {
-      console.log('Returning cached restaurant data');
-      return NextResponse.json({ restaurants: cachedRestaurants });
-    }
+    // Skip image search for carousel to conserve API quota for chat recommendations
+    let enhancedRestaurants = await enhanceRestaurantsWithRealImages(initialRestaurants, true);
     
-    console.log('Fetching real restaurant images...');
-    
-    // Enhance restaurants with real images
-    const enhancedRestaurants = await enhanceRestaurantsWithRealImages(initialRestaurants);
+    // No image search for carousel - conserve API quota for chat interface
+    console.log('Using placeholder images for carousel to conserve API quota');
     
     // Update cache
     cachedRestaurants = enhancedRestaurants;
-    lastUpdated = now;
+    lastCachedTime = now;
     
-    console.log('Successfully enhanced restaurants with real images');
-    
-    return NextResponse.json({ restaurants: enhancedRestaurants });
+    console.log(`Returning ${enhancedRestaurants.length} restaurants with placeholder images`);
+    return NextResponse.json(enhancedRestaurants);
   } catch (error) {
-    console.error('Error in restaurant-images API route:', error);
-    
-    // Return original restaurants if there's an error
-    return NextResponse.json(
-      { 
-        restaurants: initialRestaurants,
-        error: 'Failed to fetch restaurant images'
-      },
-      { status: 500 }
-    );
+    console.error('Error fetching restaurant images:', error);
+    // If there's an error, return the original data
+    return NextResponse.json(initialRestaurants);
   }
 } 

@@ -3,52 +3,42 @@ import { testGoogleSearch, googleSearch } from '@/lib/utils';
 
 export async function GET(request: Request) {
   try {
-    // Get the query parameter if provided
+    // Parse the URL to get search query parameters
     const url = new URL(request.url);
-    const query = url.searchParams.get('query') || 'best restaurants in NYC';
+    const query = url.searchParams.get('query') || 'Le Bernardin restaurant New York';
     
-    console.log('Test Google Search API endpoint called');
-    console.log('Environment variables:');
-    console.log('- GOOGLE_SEARCH_API_KEY present:', !!process.env.GOOGLE_SEARCH_API_KEY);
-    console.log('- GOOGLE_SEARCH_ENGINE_ID:', process.env.GOOGLE_SEARCH_ENGINE_ID);
+    console.log('Testing Google Search with query:', query);
     
-    // First run the automated test
+    // First check if configuration is working
     const testResult = await testGoogleSearch();
     
-    // If a specific query was provided, also test with that
-    let queryResult = null;
-    if (query && query !== 'best restaurants in NYC') {
-      console.log('Testing with user-provided query:', query);
-      queryResult = await googleSearch(query);
+    // If the test fails, don't attempt an actual search
+    if (!testResult.success) {
+      return NextResponse.json({ 
+        test: testResult,
+        error: 'Google Search API configuration is not valid'
+      }, { status: 500 });
     }
     
+    // If test is successful, try the actual search
+    let queryResult;
+    try {
+      queryResult = await googleSearch(query);
+    } catch (err) {
+      queryResult = { error: `Search execution error: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    
+    // Return both test and search results
     return NextResponse.json({
-      status: testResult.success ? 'success' : 'error',
-      message: testResult.success 
-        ? `Google Search API is working correctly (found ${testResult.resultCount} results)`
-        : `Google Search API test failed: ${testResult.error}`,
-      testResult,
-      queryResult: queryResult ? {
-        query,
-        error: queryResult.error,
-        resultCount: queryResult.results?.length || 0,
-        results: queryResult.results?.slice(0, 3) || [] // Only send the first 3 results to keep response size reasonable
-      } : null,
-      config: {
-        apiKeyPresent: !!process.env.GOOGLE_SEARCH_API_KEY,
-        apiKeyPrefix: process.env.GOOGLE_SEARCH_API_KEY?.substring(0, 10) + '...',
-        searchEngineId: process.env.GOOGLE_SEARCH_ENGINE_ID
-      }
+      test: testResult,
+      search: queryResult,
+      query
     });
     
-  } catch (error: any) {
-    console.error('Google Search Test Error:', error);
-    
-    return NextResponse.json({
-      status: 'error',
-      message: error.message || 'Unknown error',
-      type: error.constructor.name,
-      details: 'An unexpected error occurred while testing the Google Search API'
+  } catch (error) {
+    console.error('Error in test-google-search API:', error);
+    return NextResponse.json({ 
+      error: `API error: ${error instanceof Error ? error.message : String(error)}` 
     }, { status: 500 });
   }
 } 

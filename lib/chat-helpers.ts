@@ -1,5 +1,86 @@
 import { type Message } from 'ai';
-import { googleSearch } from './utils';
+import { googleSearch, withRetry, isRateLimitError } from './utils';
+import { getCachedImages, cacheRestaurantImages } from './image-cache';
+import { imageRequestQueue } from './request-queue';
+
+// -----------------------------------------------------------------------------
+// EXPERIENCE NYC ― System-Prompt for the "Social Concierge" chatbot
+// -----------------------------------------------------------------------------
+export const SOCIAL_CONCIERGE_SYSTEM_PROMPT = String.raw`
+------------------------------------------------------------------------------
+EXPERIENCE NYC CHATBOT - STRICT FORMAT INSTRUCTIONS
+------------------------------------------------------------------------------
+
+You are a NYC restaurant recommendation chatbot. You MUST FOLLOW THESE FORMATTING RULES EXACTLY:
+
+1. ALWAYS recommend EXACTLY 3 restaurants in EVERY response.
+2. CRITICALLY IMPORTANT: NEVER recommend restaurants that are permanently closed or out of business. ONLY recommend currently operational restaurants.
+3. Format each restaurant using this EXACT template:
+
+## [Restaurant Name]
+
+📍 [Neighborhood] – [brief descriptor, 8 words max]
+🕒 [Best time, 5 words max]
+🗒 [One highlight, 12 words max]
+🚇 [Closest subway station]
+
+4. Leave a blank line between each restaurant section.
+5. Always end your response with: "Would you like more details about one of these restaurants?"
+6. DO NOT use bullet points, numbered lists, or any other formats.
+7. Keep all lines extremely concise - one line per detail.
+8. NEVER show only 1 or 2 restaurants - ALWAYS show exactly 3 OPEN, OPERATIONAL restaurants.
+9. IMPORTANT: If you have any doubt about a restaurant being open, DO NOT include it. Only recommend establishments you are confident are currently in business.
+
+DO NOT DEVIATE FROM THIS FORMAT UNDER ANY CIRCUMSTANCES.
+NO EXCEPTIONS TO THESE RULES ARE PERMITTED.
+
+-------------------------------------------------------------------------------
+`;
+
+// Also append this constant below the prompt for few‑shot style priming
+export const SOCIAL_CONCIERGE_EXAMPLE = String.raw`
+## Sushi Katsuei
+
+📍 Park Slope – relaxed neighborhood favorite
+🕒 Weekdays 7 PM for omakase
+🗒 Renowned omakase at approachable prices
+🚇 7th Ave (B/Q)
+
+## Bozu
+
+📍 Williamsburg – trendy and casual vibe
+🕒 Weekend nights for energy
+🗒 Sushi bombs offer unique twist on rolls
+🚇 Bedford Ave (L)
+
+## Uotora
+
+📍 Crown Heights – intimate chef-owned gem
+🕒 Tuesday-Thursday for best seats
+🗒 Daily-changing omakase featuring seasonal fish
+🚇 Franklin Ave (2/3/4/5)
+
+Would you like more details about one of these restaurants?
+`;
+
+// ---------- Usage snippet -----------------------------------------------
+// messages = [
+//   { role: "system",    content: SOCIAL_CONCIERGE_SYSTEM_PROMPT },
+//   { role: "assistant", content: SOCIAL_CONCIERGE_EXAMPLE       },
+//   { role: "user",      content: userInput                      }
+// ]
+// ------------------------------------------------------------------------
+
+// Type for Google search results
+type SearchResult = {
+  results?: Array<{
+    link?: string;
+    title?: string;
+    snippet?: string;
+    source?: string;
+  }>;
+  error?: string | { status?: number; message?: string };
+};
 
 export interface RestaurantRecommendation {
   name: string;
@@ -29,66 +110,207 @@ function validateRestaurantData(data: Partial<RestaurantRecommendation>): data i
   );
 }
 
+/**
+ * Validate if a restaurant exists using Google Search API
+ * @param name Restaurant name
+ * @param location Restaurant location
+ * @returns Promise<boolean> indicating if the restaurant likely exists
+ */
+export async function validateRestaurantExists(name: string, location: string): Promise<boolean> {
+  try {
+    console.log(`Validating if restaurant exists: ${name} in ${location}`);
+    
+    // Perform a Google search with the restaurant name and location
+    const searchQuery = `${name} restaurant ${location}`;
+    const searchResult = await googleSearch(searchQuery);
+    
+    // Check if we got any search results
+    if (!searchResult || searchResult.length === 0) {
+      console.warn(`No search results found for ${name} in ${location}`);
+      return false;
+    }
+    
+    // Check if the restaurant name appears in the top results (titles or snippets)
+    // This is a simple heuristic but helps filter out non-existent places
+    const restaurantNameLower = name.toLowerCase();
+    
+    // Count how many results mention the restaurant name
+    let mentionsCount = 0;
+    
+    for (const result of searchResult.slice(0, 5)) { // Check top 5 results
+      const titleLower = (result.title || '').toLowerCase();
+      const snippetLower = (result.snippet || '').toLowerCase();
+      
+      if (titleLower.includes(restaurantNameLower) || snippetLower.includes(restaurantNameLower)) {
+        mentionsCount++;
+      }
+    }
+    
+    // If at least 2 results mention the restaurant, it likely exists
+    const restaurantExists = mentionsCount >= 2;
+    console.log(`Restaurant "${name}" validation result: ${restaurantExists ? 'exists' : 'might not exist'} (${mentionsCount} mentions)`);
+    
+    // If it exists, also check if it's open
+    if (restaurantExists) {
+      const { isOpen, status } = await checkRestaurantStatus(name, location);
+      if (!isOpen) {
+        console.warn(`Restaurant "${name}" exists but appears to be ${status.toLowerCase()}`);
+        return false; // Don't recommend closed restaurants
+      }
+    }
+    
+    return restaurantExists;
+  } catch (error) {
+    console.error(`Error validating restaurant existence: ${error}`);
+    // In case of error, return true to avoid false negatives
+    return true;
+  }
+}
+
+// Track request timestamps to implement rate limiting
+const requestTimestamps: number[] = [];
+const MAX_REQUESTS_PER_MINUTE = 10; // Maximum allowed requests per minute
+const REQUEST_WINDOW = 60 * 1000; // 1 minute in milliseconds
+
+/**
+ * Checks if we can make a new API request or if we'd hit rate limits
+ * @returns boolean indicating if we should throttle requests
+ */
+function shouldThrottleRequests(): boolean {
+  const now = Date.now();
+  
+  // Remove timestamps older than our window
+  const recentRequests = requestTimestamps.filter(
+    timestamp => now - timestamp < REQUEST_WINDOW
+  );
+  
+  // Update our timestamps array
+  requestTimestamps.length = 0;
+  requestTimestamps.push(...recentRequests);
+  
+  // Check if we've hit our rate limit
+  if (requestTimestamps.length >= MAX_REQUESTS_PER_MINUTE) {
+    console.log(`Rate limiting ourselves - already made ${requestTimestamps.length} requests in the last minute`);
+    return true;
+  }
+  
+  // We're under the limit, so record this request
+  requestTimestamps.push(now);
+  return false;
+}
+
 // New function to search for real restaurant images
-export async function findRestaurantImages(restaurantName: string, location: string): Promise<string[]> {
+export async function findRestaurantImages(restaurantName: string, location: string, cuisine: string = ''): Promise<string[]> {
   try {
     console.log(`Searching for images of ${restaurantName} in ${location}...`);
     
-    // Create specific search queries for different aspects of the restaurant
-    const interiorQuery = `${restaurantName} ${location} restaurant interior photos`;
-    const foodQuery = `${restaurantName} ${location} food dishes photos`;
-    const exteriorQuery = `${restaurantName} ${location} restaurant exterior building`;
+    // Check cache first
+    const cachedImages = getCachedImages(restaurantName, location);
+    if (cachedImages) {
+      console.log(`Using ${cachedImages.length} cached images for ${restaurantName}`);
+      return cachedImages;
+    }
     
-    // Execute the searches
-    const [interiorResults, foodResults, exteriorResults] = await Promise.all([
-      googleSearch(interiorQuery),
-      googleSearch(foodQuery),
-      googleSearch(exteriorQuery)
-    ]);
+    // Add higher priority indicator for chat interactions 
+    console.log(`PRIORITY: Searching images for chat recommendation: ${restaurantName}`);
+    
+    // Check if we need to throttle ourselves
+    if (shouldThrottleRequests()) {
+      console.log('Self-throttling to avoid rate limits, returning no images');
+      
+      // Store an empty result in cache to avoid repeated attempts
+      if (typeof window === 'undefined') {
+        cacheRestaurantImages(restaurantName, location, []);
+      }
+      return [];
+    }
+    
+    // Simplify to a single query for chat recommendations to save API quota
+    const mainQuery = `${restaurantName} ${location} restaurant`;
+    
+    // Use the queue system to stagger our requests and avoid rate limits
+    let searchResults: any[] = [];
+    
+    try {
+      // Execute a single search to conserve API quota
+      console.log('Making a single search request to conserve API quota');
+      const result = await imageRequestQueue.add(async () => {
+        return await googleSearch(mainQuery)
+          .catch((err: Error) => ({ error: err.message }));
+      });
+      
+      searchResults = Array.isArray(result) ? result : [];
+    } catch (error: any) {
+      console.error('Queue execution error:', error);
+      // Return an array with error objects so we can handle them below
+      searchResults = [{ error }];
+    }
+    
+    // Helper function to check if error has a status property
+    const hasStatusProperty = (error: any): error is { status: number } => {
+      return error && typeof error === 'object' && 'status' in error;
+    };
+    
+    // Check if we hit a rate limit (429) error
+    const isRateLimited = 
+      (searchResults[0]?.error && (
+        (typeof searchResults[0].error === 'string' && searchResults[0].error.includes('429')) ||
+        (hasStatusProperty(searchResults[0].error) && searchResults[0].error.status === 429)
+      ));
+    
+    if (isRateLimited) {
+      console.log('Google Search API rate limit exceeded, returning no images');
+      
+      // Store an empty result in cache to avoid repeated attempts
+      if (typeof window === 'undefined') {
+        cacheRestaurantImages(restaurantName, location, []);
+      }
+      return [];
+    }
     
     const images: string[] = [];
     
-    // Helper function to extract image URLs from search results
-    const extractImageUrl = (results: any) => {
-      if (!results.results || results.results.length === 0) return null;
-      
-      // Look for image links in results (typically ending with image extensions or from image sites)
-      for (const result of results.results) {
-        const link = result.link;
-        // Check if it's an image URL or from an image hosting site
-        if (
-          link.match(/\.(jpg|jpeg|png|webp|avif)(\?.*)?$/i) ||
-          link.includes('images') ||
-          link.includes('photos') ||
-          link.includes('media') ||
-          link.includes('unsplash') ||
-          link.includes('pexels') ||
-          link.includes('shutterstock') ||
-          link.includes('cloudfront') ||
-          link.includes('googleusercontent')
-        ) {
-          return link;
+    // Extract up to 3 images from the search results
+    if (searchResults && searchResults.length > 0) {
+      // Get up to 3 valid images from the results
+      for (const result of searchResults) {
+        if (images.length >= 3) break;  // Stop once we have 3 images
+        if (result.link && result.link.match(/^https?:\/\//)) {
+          images.push(result.link);
         }
       }
-      
-      // If no clear image URL, take the first result as it might lead to an image
-      return results.results[0]?.link || null;
-    };
-    
-    // Extract one image from each search result
-    const interiorImage = extractImageUrl(interiorResults);
-    const foodImage = extractImageUrl(foodResults);
-    const exteriorImage = extractImageUrl(exteriorResults);
-    
-    // Add the found images to our collection
-    if (interiorImage) images.push(interiorImage);
-    if (foodImage) images.push(foodImage);
-    if (exteriorImage) images.push(exteriorImage);
+    }
     
     console.log(`Found ${images.length} real images for ${restaurantName}`);
-    return images;
+    
+    // If we have at least one real image, return them
+    if (images.length > 0) {
+      // Ensure we have exactly 3 images
+      while (images.length < 3) {
+        // Add duplicates of existing images if we don't have enough
+        const existingImage = images[images.length % images.length];
+        images.push(existingImage);
+      }
+      
+      // Cache these results for future use
+      const finalImages = images.slice(0, 3);
+      console.log(`Caching ${finalImages.length} images for ${restaurantName}`);
+      cacheRestaurantImages(restaurantName, location, finalImages);
+      
+      return finalImages;
+    }
+    
+    // If no images found, use placeholder images
+    console.log('No real images found, using placeholder images');
+    
+    // Cache empty result to avoid repeated attempts
+    if (typeof window === 'undefined') {
+      cacheRestaurantImages(restaurantName, location, []);
+    }
+    return [];
   } catch (error) {
-    console.error('Error finding restaurant images:', error);
+    console.error(`Error in findRestaurantImages for ${restaurantName}:`, error);
+    // Final fallback: use generic restaurant images
     return [];
   }
 }
@@ -122,52 +344,15 @@ export async function parseRestaurantData(content: string): Promise<RestaurantRe
         return null;
       }
       
-      // Add cuisine-specific images based on the restaurant type
-      let defaultImages = [
-        'https://images.unsplash.com/photo-1555396273-367ea4eb4db5', // Restaurant interior
-        'https://images.unsplash.com/photo-1504674900247-0877df9cc836', // Food dish
-        'https://images.unsplash.com/photo-1592861956120-e524fc739696'  // Bar/ambiance
-      ];
-      
-      // Check cuisine type and assign appropriate images
-      const cuisineType = data.cuisine.toLowerCase();
-      if (cuisineType.includes('sushi') || cuisineType.includes('japanese')) {
-        defaultImages = [
-          'https://images.unsplash.com/photo-1579871494447-9811cf80d66c', // Sushi restaurant
-          'https://images.unsplash.com/photo-1563612116625-3012372fccce', // Sushi platter
-          'https://images.unsplash.com/photo-1607301406259-dfb186e15de8'  // Sushi chef
-        ];
-      } else if (cuisineType.includes('italian')) {
-        defaultImages = [
-          'https://images.unsplash.com/photo-1481833761820-0509d3217039', // Italian restaurant
-          'https://images.unsplash.com/photo-1595295333158-4742f28fbd85', // Pasta dish
-          'https://images.unsplash.com/photo-1551183053-bf91a1d81141'  // Italian ambiance
-        ];
-      } else if (cuisineType.includes('mexican')) {
-        defaultImages = [
-          'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c', // Mexican restaurant
-          'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38', // Tacos
-          'https://images.unsplash.com/photo-1586511925558-a4c6376fe65f'  // Mexican food
-        ];
-      } else if (cuisineType.includes('chinese')) {
-        defaultImages = [
-          'https://images.unsplash.com/photo-1623341214825-9f4f963727da', // Chinese restaurant
-          'https://images.unsplash.com/photo-1583032015879-e5022cb87c3b', // Dim sum
-          'https://images.unsplash.com/photo-1546069901-5ec6a79120b0'  // Chinese dish
-        ];
-      } else if (cuisineType.includes('indian')) {
-        defaultImages = [
-          'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4', // Indian restaurant
-          'https://images.unsplash.com/photo-1585937421612-70a008356fbe', // Indian curry
-          'https://images.unsplash.com/photo-1542367592-8849eb970d3a'  // Indian food
-        ];
-      } else if (cuisineType.includes('french')) {
-        defaultImages = [
-          'https://images.unsplash.com/photo-1515668236457-83c3b8764839', // French restaurant
-          'https://images.unsplash.com/photo-1414235077428-338989a2e8c0', // French cuisine
-          'https://images.unsplash.com/photo-1550507992-eb63ffee0847'  // Wine and cheese
-        ];
+      // Verify that the restaurant actually exists using Google Search
+      const restaurantExists = await validateRestaurantExists(data.name, data.location);
+      if (!restaurantExists) {
+        console.warn(`Restaurant "${data.name}" likely does not exist or cannot be verified`);
+        return null;
       }
+      
+      // Default fallback image
+      const defaultImage = '/images/placeholder-restaurant.jpg';
       
       // Process the provided images if any
       let processedImages = data.images || [];
@@ -181,39 +366,47 @@ export async function parseRestaurantData(content: string): Promise<RestaurantRe
                              !img.includes('placeholder') &&
                              !img.includes('example'));
       
-      // Try to get real images for the restaurant
+      // Try to get real images for the restaurant - only run on server side
       if (!hasRealImages && typeof window === 'undefined') {
         try {
           console.log(`Looking for real images for ${data.name}...`);
           const realImages = await findRestaurantImages(data.name, data.location);
-          
           if (realImages.length > 0) {
             console.log(`Found ${realImages.length} real images for ${data.name}, using them instead of placeholders`);
             processedImages = realImages;
+          } else {
+            // No real images found, use placeholder images
+            console.log(`No real images found for ${data.name}, using placeholder images`);
+            processedImages = [];
           }
         } catch (error) {
           console.error('Error getting real restaurant images:', error);
-          // Fall back to defaults (which happens below)
+          processedImages = [];
         }
       }
       
       // Validate each image URL
       processedImages = processedImages.map(img => {
-        // Check if the image URL is a placeholder
-        if (img.includes('placeholder') || !img.startsWith('http')) {
-          return defaultImages[0]; // Replace with a real image
+        if (!img || typeof img !== 'string') {
+          return defaultImage;
         }
+        
+        // Check if it's a local path
+        if (img.startsWith('/images/')) {
+          return img; // Keep local paths as is
+        }
+        
+        // Check if the image URL is a placeholder, invalid, or doesn't start with http/https
+        if (img.includes('placeholder') || img.includes('example') || !img.startsWith('http')) {
+          return defaultImage; // Replace with local placeholder image
+        }
+        
         return img;
       });
       
       // If we don't have enough images, fill in with defaults
       while (processedImages.length < 3) {
-        const defaultIndex = processedImages.length;
-        if (defaultIndex < defaultImages.length) {
-          processedImages.push(defaultImages[defaultIndex]);
-        } else {
-          processedImages.push(defaultImages[0]); // Use the first default if we run out
-        }
+        processedImages.push(defaultImage);
       }
       
       // Clean and validate the data
@@ -252,5 +445,128 @@ export async function parseRestaurantData(content: string): Promise<RestaurantRe
   } catch (error) {
     console.error('Error parsing restaurant data:', error);
     return null;
+  }
+}
+
+/**
+ * Check if a restaurant is currently open (not permanently closed)
+ * @param name Restaurant name
+ * @param location Restaurant location
+ * @returns Promise<{isOpen: boolean, status: string}> indicating operational status
+ */
+export async function checkRestaurantStatus(name: string, location: string): Promise<{isOpen: boolean, status: string}> {
+  try {
+    console.log(`Checking operational status for: ${name} in ${location}`);
+    
+    // Perform a Google search with the restaurant name and location
+    const searchQuery = `${name} restaurant ${location} hours open closed permanently`;
+    const searchResult = await googleSearch(searchQuery);
+    
+    // Check if we got any search results
+    if (!searchResult || searchResult.length === 0) {
+      console.warn(`No search results found for ${name} status check`);
+      
+      // Try a more specific search with "permanently closed"
+      const closedSearchQuery = `${name} permanently closed ${location}`;
+      const closedSearchResult = await googleSearch(closedSearchQuery);
+      
+      if (closedSearchResult && closedSearchResult.length > 0) {
+        // Check if the top results strongly indicate a permanent closure
+        const stronglySuggestsClosed = closedSearchResult.slice(0, 3).some(result => {
+          const titleLower = (result.title || '').toLowerCase();
+          const snippetLower = (result.snippet || '').toLowerCase();
+          
+          return titleLower.includes('permanently closed') || 
+                 snippetLower.includes('permanently closed') ||
+                 (snippetLower.includes('closed') && (
+                   snippetLower.includes('for good') || 
+                   snippetLower.includes('out of business')
+                 ));
+        });
+        
+        if (stronglySuggestsClosed) {
+          console.log(`Second search confirms restaurant "${name}" is permanently closed`);
+          return { isOpen: false, status: "Permanently Closed" };
+        }
+      }
+      
+      return { isOpen: true, status: "Unknown" }; // Default to open if we can't determine
+    }
+    
+    // Look for indicators in search results with stronger pattern matching
+    const permanentlyClosed = searchResult.some(result => {
+      const titleLower = (result.title || '').toLowerCase();
+      const snippetLower = (result.snippet || '').toLowerCase();
+      
+      // Look for clear indications of permanent closure
+      return titleLower.includes('permanently closed') || 
+             snippetLower.includes('permanently closed') ||
+             titleLower.includes('closed permanently') ||
+             snippetLower.includes('closed permanently') ||
+             (snippetLower.includes('closed') && (
+               snippetLower.includes('for good') || 
+               snippetLower.includes('out of business') ||
+               snippetLower.includes('shut down') ||
+               snippetLower.includes('no longer in business')
+             ));
+    });
+    
+    if (permanentlyClosed) {
+      console.log(`Restaurant "${name}" appears to be permanently closed`);
+      return { isOpen: false, status: "Permanently Closed" };
+    }
+    
+    // Check for temporary closure
+    const temporarilyClosed = searchResult.some(result => {
+      const titleLower = (result.title || '').toLowerCase();
+      const snippetLower = (result.snippet || '').toLowerCase();
+      
+      return (snippetLower.includes('temporarily closed') || 
+              titleLower.includes('temporarily closed') ||
+              snippetLower.includes('closed until') ||
+              snippetLower.includes('closed for renovation') ||
+              snippetLower.includes('closed for remodeling') ||
+              (snippetLower.includes('closed') && (
+                snippetLower.includes('renovation') ||
+                snippetLower.includes('remodel') ||
+                snippetLower.includes('until') ||
+                snippetLower.includes('temporary')
+              ))) &&
+              !snippetLower.includes('permanently closed');
+    });
+    
+    if (temporarilyClosed) {
+      console.log(`Restaurant "${name}" appears to be temporarily closed`);
+      return { isOpen: false, status: "Temporarily Closed" };
+    }
+    
+    // Extract any hours information if available
+    let hoursInfo = "";
+    for (const result of searchResult) {
+      const snippetLower = (result.snippet || '').toLowerCase();
+      
+      if (snippetLower.includes('open') && (
+          snippetLower.includes('hour') || 
+          snippetLower.includes(':') || 
+          snippetLower.includes('am') || 
+          snippetLower.includes('pm')
+        )) {
+        const openingHoursMatch = result.snippet?.match(/open[^.!?]*[.!?]/i);
+        if (openingHoursMatch && openingHoursMatch[0]) {
+          hoursInfo = openingHoursMatch[0].trim();
+          break;
+        }
+      }
+    }
+    
+    console.log(`Restaurant "${name}" appears to be operational`);
+    return { 
+      isOpen: true, 
+      status: hoursInfo || "Operational" 
+    };
+  } catch (error) {
+    console.error(`Error checking restaurant status: ${error}`);
+    // In case of error, assume it's open to avoid false negatives
+    return { isOpen: true, status: "Unknown" };
   }
 } 
