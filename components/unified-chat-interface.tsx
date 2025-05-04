@@ -186,13 +186,14 @@ function formatMessageContent(content: string): React.ReactNode {
 const RestaurantDetailCard = ({ restaurantName }: { restaurantName: string }) => {
   const [restaurant, setRestaurant] = useState({
     name: restaurantName,
-    cuisine: "Italian",
-    location: "New York City",
+    cuisine: "Contemporary American",
+    location: "Flatiron District",
     priceRange: "$$$",
-    rating: 4.8,
+    rating: 4.9,
     image: "/images/placeholder-restaurant.jpg",
-    description: "A cozy spot known for authentic cuisine and excellent service.",
+    description: "Sophisticated tasting menus featuring seasonal ingredients in an art deco space with stunning views of Madison Square Park.",
     website: "https://www.google.com/search?q=restaurant+reservation",
+    hours: "5:00 PM - 10:00 PM",
     isOpen: true,
     status: "Operational"
   });
@@ -257,15 +258,19 @@ const RestaurantDetailCard = ({ restaurantName }: { restaurantName: string }) =>
               websiteUrl = `https://${restaurantSlug}.com`;
             }
             
+            // Default hours if not provided
+            const defaultHours = "5:00 PM - 10:00 PM";
+            
             setRestaurant({
               name: found.name,
-              cuisine: found.cuisine || "NYC Cuisine",
-              location: found.neighborhood || found.location || "New York City",
-              priceRange: found.priceRange || "$$$",
-              rating: found.rating || 4.5,
+              cuisine: found.cuisine || "Contemporary American",
+              location: found.neighborhood || found.location || "Flatiron District",
+              priceRange: found.priceRange || "$",
+              rating: found.rating || 4.9,
               image: found.images?.[0] || found.image || found.imageUrl || "/images/placeholder-restaurant.jpg",
-              description: found.description || "A fantastic NYC restaurant.",
+              description: found.description || "Sophisticated tasting menus featuring seasonal ingredients in an art deco space with stunning views.",
               website: websiteUrl,
+              hours: found.hours || found.openHours || defaultHours,
               isOpen,
               status
             });
@@ -314,71 +319,76 @@ const RestaurantDetailCard = ({ restaurantName }: { restaurantName: string }) =>
     fetchRestaurantData();
   }, [restaurantName]);
 
-  // Determine reservation button style
-  const getReservationButton = () => {
-    return {
-      text: "Make A Reservation",
-      class: "flex-1 bg-[#D4AF37] hover:bg-[#BF9F30] text-white py-2 px-3 rounded-md text-center transition-colors flex items-center justify-center text-sm",
-      disabled: false
-    };
-  };
-  
-  const reservationBtn = getReservationButton();
-
   return (
-    <div className="mt-3 p-4 bg-white rounded-lg shadow-md border border-gray-200">
+    <div className="mt-3 bg-[#f9f9f9] rounded-lg shadow border border-gray-200 overflow-hidden">
       {isLoading ? (
         <div className="flex justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#D4AF37]"></div>
         </div>
       ) : (
         <>
-          {/* Restaurant image - remove grayscale filter */}
-          <div className="w-full h-40 rounded-md overflow-hidden mb-3">
-            <img 
-              src={restaurant.image} 
-              alt={restaurant.name}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // Fallback image if the restaurant image fails to load
-                (e.target as HTMLImageElement).src = '/images/placeholder-restaurant.jpg';
-              }}
-            />
+          <div className="p-4 pb-3">
+            {/* Restaurant Header */}
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {restaurant.name}
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="text-sm text-gray-700">{restaurant.cuisine}</div>
+                  <div className="text-sm text-gray-700">•</div>
+                  <div className="text-sm text-gray-700">Fine Dining</div>
+                </div>
+              </div>
+              <div className="flex items-center">
+                <div className="flex items-center text-xl font-semibold text-amber-500">
+                  <svg className="w-5 h-5 mr-1 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  {restaurant.rating}
+                </div>
+              </div>
+            </div>
+            
+            {/* Restaurant Description */}
+            <p className="text-sm text-gray-700 mt-3 mb-4">
+              {restaurant.description}
+            </p>
           </div>
           
-          {/* Restaurant Header with Rating - remove status label */}
-          <div className="flex justify-between items-center mb-2">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                {restaurant.name}
-              </h3>
-              <p className="text-xs text-gray-600">
-                {restaurant.cuisine} • {restaurant.priceRange}
-              </p>
+          {/* Restaurant Details Section */}
+          <div className="px-4 pb-3">
+            <div className="flex items-center text-gray-700 mb-2">
+              <svg className="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-sm">{restaurant.location}</span>
             </div>
-            <div className="flex items-center">
-              <span className="bg-green-100 text-green-800 text-xs font-medium py-0.5 px-1.5 rounded-md flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} className="w-3 h-3 mr-0.5 text-yellow-500">
-                  <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clipRule="evenodd" />
-                </svg>
-                {restaurant.rating}
-              </span>
+            <div className="flex items-center text-gray-700 mb-2">
+              <svg className="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm">{restaurant.hours}</span>
+            </div>
+            <div className="flex items-center text-gray-700 mb-4">
+              <svg className="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm">{restaurant.priceRange}</span>
             </div>
           </div>
-
-          {/* Restaurant Description */}
-          <p className="text-sm text-gray-700 mb-4">{restaurant.description}</p>
-
+          
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex border-t border-gray-200">
             <a
               href={restaurant.website}
               target="_blank"
               rel="noopener noreferrer"
-              className={reservationBtn.class}
+              className="flex-1 py-3 flex items-center justify-center bg-[#D4AF37] text-white font-medium text-sm hover:bg-[#C49F27] transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               Make A Reservation
             </a>
@@ -386,13 +396,12 @@ const RestaurantDetailCard = ({ restaurantName }: { restaurantName: string }) =>
               href={`https://maps.google.com/?q=${encodeURIComponent(restaurant.name + ' ' + restaurant.location)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-3 rounded-md text-center transition-colors flex items-center justify-center text-sm"
+              className="flex-1 py-3 flex items-center justify-center border-l border-gray-200 text-gray-700 font-medium text-sm hover:bg-gray-100 transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
               </svg>
-              View on Map
+              View on Google Maps
             </a>
           </div>
         </>
@@ -689,10 +698,21 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
 
     // Check if this is a request to see details
     const inputLower = input.toLowerCase();
+    
+    // Enhanced "tell me more" detection
+    const isTellMeMore = 
+      inputLower.includes('tell me more') || 
+      inputLower.includes('more details') || 
+      inputLower.includes('more information') || 
+      inputLower.includes('know more') ||
+      inputLower.includes('learn more') ||
+      inputLower.includes('show more') ||
+      inputLower.match(/\bmore\b/) !== null;
+      
     if (inputLower.includes('details') || inputLower.includes('reservation') || 
         inputLower.includes('show me') || inputLower.includes('tell me about') ||
         (inputLower.includes('yes') && processedMessages.length > 0) ||
-        inputLower.includes('share more')) {
+        inputLower.includes('share more') || isTellMeMore) {
       
       // Extract restaurant name directly from the user's message
       const restaurantNameMatch = 
@@ -707,6 +727,47 @@ export default function UnifiedChatInterface({ initialHeight = "400px", onReset 
         const restaurantName = restaurantNameMatch[1].trim();
         handleShowRestaurantDetails(restaurantName);
         return;
+      }
+      
+      // If it's a general "tell me more" request without specifying a restaurant,
+      // try to identify the most recently mentioned restaurant
+      if (isTellMeMore) {
+        // Find the last assistant message with restaurant recommendations
+        // First check for ## restaurant headers in the messages
+        let lastRestaurantName = null;
+        
+        // Loop through messages in reverse to find the most recent restaurant mention
+        for (let i = processedMessages.length - 1; i >= 0; i--) {
+          const msg = processedMessages[i];
+          if (msg.role === 'assistant') {
+            // Look for restaurant names in markdown headers
+            const restaurantMatches = msg.content.match(/##\s+([^\n]+)/g);
+            if (restaurantMatches && restaurantMatches.length > 0) {
+              // Get the restaurant name from the first ## header
+              lastRestaurantName = restaurantMatches[0].replace(/^##\s+/, '').trim();
+              break;
+            }
+            
+            // Check for "details for X" format
+            const detailsMatch = msg.content.match(/details for ([^:\.]+)[:\.]/i);
+            if (detailsMatch && detailsMatch[1]) {
+              lastRestaurantName = detailsMatch[1].trim();
+              break;
+            }
+            
+            // Look for restaurant recommendations in the processed messages
+            if (msg.restaurantRecommendation) {
+              lastRestaurantName = msg.restaurantRecommendation.name;
+              break;
+            }
+          }
+        }
+        
+        // If we found a restaurant name, show its details
+        if (lastRestaurantName) {
+          handleShowRestaurantDetails(lastRestaurantName);
+          return;
+        }
       }
       
       // Extract restaurant name from the last assistant message that asked about details
