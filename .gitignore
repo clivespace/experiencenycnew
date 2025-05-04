@@ -30,4 +30,6 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+next-env.d.ts# Ignored backup files
+*.bak
+app/api/test-image-search/route.ts.bak
