@@ -1,44 +1,65 @@
-# NYC Dining Landing Page
+# NYC Dining Landing Page [![CI](https://github.com/clivespace/experiencenyc/actions/workflows/ci.yml/badge.svg?branch=)](https://github.com/clivespace/experiencenyc/actions/workflows/ci.yml)
 
-A modern landing page for NYC restaurants and dining experiences built with Next.js.
+A modern, responsive web application showcasing New York City's finest dining establishments with AI-powered recommendations.
 
 ## Features
 
-- Clean, responsive UI
-- Search functionality
-- Restaurant discovery
-- Built with Next.js and Tailwind CSS
+- Interactive restaurant showcase
+- AI-powered dining recommendations via ChatGPT
+- Responsive, modern UI
+- Real-time restaurant image search
+- Restaurant details and reviews
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v18 or later)
-- npm or yarn
+- Node.js 16+ and npm/yarn
 
 ### Installation
 
 1. Clone the repository
-   ```
-   git clone https://github.com/your-username/nyc-dining-landing.git
-   cd nyc-dining-landing
-   ```
-
-2. Install dependencies
-   ```
+2. Install dependencies:
+   ```bash
    npm install
+   # or
+   yarn install
    ```
 
-3. Set up environment variables
-   - Copy `.env.example` to `.env.local`
-   - Fill in your API keys and configuration values
-
-4. Run the development server
+3. Create a `.env.local` file in the root directory with the following variables:
    ```
+   # Google Search API Credentials
+   GOOGLE_SEARCH_API_KEY=your-api-key-here
+   GOOGLE_SEARCH_ENGINE_ID=your-search-engine-id-here
+   
+   # App Configuration
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
+   ```
+
+4. Start the development server:
+   ```bash
    npm run dev
+   # or
+   yarn dev
    ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Google Search API Setup
+
+To use the restaurant image search functionality:
+
+1. Create a Google Cloud Project at [https://console.cloud.google.com/](https://console.cloud.google.com/)
+2. Enable the "Custom Search API" in Google Cloud Console
+3. Create API credentials to get your API key
+4. Create a Programmable Search Engine at [https://programmablesearchengine.google.com/](https://programmablesearchengine.google.com/)
+5. Configure your search engine to search the entire web
+6. Get your Search Engine ID from the search engine settings
+7. Add both values to your `.env.local` file
+
+## License
+
+This project is licensed under the MIT License.
 
 ## Building for Production
 
