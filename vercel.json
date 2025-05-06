@@ -1,25 +1,11 @@
 {
-  "version": 2,
-  "buildCommand": "npm run vercel-build",
+  "buildCommand": "npm run build",
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "nextjs",
   "devCommand": "npm run dev",
   "github": {
-    "silent": true,
-    "enabled": true
+    "silent": true
   },
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ],
   "env": {
     "GOOGLE_API_KEY": "@google_api_key",
     "GOOGLE_CSE_ID": "@google_cse_id",
