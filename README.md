@@ -25,16 +25,17 @@ npm run dev
 # Regular build with server features
 npm run build
 
-# Static export (for GitHub Pages or other static hosts)
-# 1. Temporarily rename API directory: mv app/api app/_api_disabled
-# 2. Build static site: npm run build
-# 3. Restore API directory: mv app/_api_disabled app/api
-# 4. Static files will be in the 'out' directory
+# Static export (for static hosting services)
+# 1. Set NEXT_PUBLIC_STATIC_EXPORT=true in your environment
+# 2. Run npm run build
+# 3. Static files will be in the 'out' directory
 ```
 
 ## Deployment
 
-The static export can be deployed to any static hosting service such as GitHub Pages, Vercel, Netlify, or any web server.
+The application can be deployed to Vercel for full functionality including API routes.
+
+For static deployment without API features, the static export can be deployed to any static hosting service such as Netlify or any web server.
 
 ## API Keys Configuration for Image Search
 
