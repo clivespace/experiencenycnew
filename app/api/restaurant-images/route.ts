@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getFallbackRestaurantImages } from '@/lib/fallback-images';
-import type { Restaurant } from '@/lib/restaurant-helpers';
+import { enhanceRestaurantsWithRealImages, type Restaurant } from '@/lib/restaurant-helpers';
 
 export const dynamic = "force-dynamic";
 
@@ -74,5 +73,12 @@ const initialRestaurants: Restaurant[] = [
 ];
 
 export async function GET() {
-  return NextResponse.json(initialRestaurants);
+  // Enrich restaurants with real images using Google/Unsplash APIs
+  const restaurantsWithImages = await enhanceRestaurantsWithRealImages(
+    initialRestaurants,
+    false,   // do not skip image search
+    3        // batch size to avoid rate limits
+  );
+
+  return NextResponse.json(restaurantsWithImages);
 } 
