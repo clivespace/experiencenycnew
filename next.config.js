@@ -1,10 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Remove static export options for dynamic API usage
-  // output: 'export',
-  // distDir: 'out',
+  // Conditionally enable static export based on environment variable
+  ...(process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true' ? {
+    output: 'export',
+    distDir: 'out',
+  } : {}),
   
-  // Enable API routes
+  // Enable API routes in dynamic mode
   skipTrailingSlashRedirect: true,
   trailingSlash: true,
   
@@ -36,12 +38,12 @@ const nextConfig = {
         hostname: '**',
       }
     ],
-    unoptimized: false // Enable image optimization
+    unoptimized: process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true' // Enable image optimization in dynamic mode, but require unoptimized for static export
   },
   env: {
     GOOGLE_SEARCH_API_KEY: process.env.GOOGLE_API_KEY || '',
     GOOGLE_SEARCH_ENGINE_ID: process.env.GOOGLE_CSE_ID || '',
-    NEXT_PUBLIC_STATIC_EXPORT: 'false'
+    NEXT_PUBLIC_STATIC_EXPORT: process.env.NEXT_PUBLIC_STATIC_EXPORT || 'false'
   }
 }
 

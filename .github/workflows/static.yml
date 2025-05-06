@@ -44,8 +44,12 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_STATIC_EXPORT: 'true'
+      - name: Create .nojekyll file
+        run: touch out/.nojekyll
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -53,4 +57,6 @@ jobs:
           path: './out'
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4 
+        uses: actions/deploy-pages@v4
+        with:
+          enablement: true 
