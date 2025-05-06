@@ -1,0 +1,67 @@
+name: Enable GitHub Pages
+
+on:
+  # Run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: write
+  deployments: write
+  statuses: write
+  
+jobs:
+  enable-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable GitHub Pages
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              // Enable GitHub Pages
+              await github.rest.repos.enablePages({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                source: {
+                  branch: 'gh-pages',
+                  path: '/'
+                }
+              });
+              console.log('GitHub Pages enabled successfully!');
+            } catch (error) {
+              // If it fails, it might be already enabled or need different settings
+              console.log('Error enabling Pages: ' + error.message);
+              // Try creating a gh-pages branch
+              try {
+                const mainRef = await github.rest.git.getRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: 'heads/main'
+                });
+                
+                await github.rest.git.createRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: 'refs/heads/gh-pages',
+                  sha: mainRef.data.object.sha
+                });
+                console.log('Created gh-pages branch');
+                
+                // Now try enabling Pages again
+                await github.rest.repos.enablePages({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  source: {
+                    branch: 'gh-pages',
+                    path: '/'
+                  }
+                });
+                console.log('GitHub Pages enabled successfully on second attempt!');
+              } catch (secondError) {
+                console.log('Could not create gh-pages branch: ' + secondError.message);
+              }
+            } 
