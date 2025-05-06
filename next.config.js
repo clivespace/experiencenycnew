@@ -5,6 +5,12 @@ const nextConfig = {
   // Settings for static export
   skipTrailingSlashRedirect: true,
   trailingSlash: true,
+  // Prevent Next.js from processing API routes
+  rewrites: async () => {
+    return [];
+  },
+  // Completely exclude the /api directory
+  pageExtensions: ['tsx', 'ts', 'jsx', 'js', 'md', 'mdx'],
   images: {
     domains: [
       'images.unsplash.com',

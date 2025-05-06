@@ -42,20 +42,12 @@ export async function searchRestaurantImages(
       return getFallbackImages();
     }
     
-    // Use direct access to the Google and Unsplash APIs when in a server component
+    // In static export mode or server components, use fallback images
     if (typeof window === 'undefined') {
-      try {
-        // Try direct server-side import of the relevant module
-        const { safeImageSearch } = require('@/app/api/image-proxy/route');
-        // Call the search function directly
-        return await safeImageSearch(query, (page - 1) * 10 + 1);
-      } catch (err) {
-        // Fall back to static images if module import fails
-        return getFallbackImages();
-      }
+      return getFallbackImages();
     } 
     
-    // In client components, use the API route
+    // In client components with dynamic mode, use the API route (not available in static export)
     try {
       const res = await fetch(
         `/api/image-proxy?q=${encodeURIComponent(query)}&page=${page}`,
@@ -93,7 +85,12 @@ export async function getRestaurantImageUrl(query: string): Promise<string> {
     const images = await searchRestaurantImages(query)
     
     if (images.length > 0) {
-      // Return the first image URL through our proxy
+      // For static export, just return the image link directly
+      if (process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true') {
+        return images[0].imageLink;
+      }
+      
+      // In dynamic mode, return through the proxy
       return `/api/image-proxy/image?url=${encodeURIComponent(images[0].imageLink)}`
     }
     
@@ -218,7 +215,7 @@ const googleImageSearch = async (query: string, start = 1) => {
 // Fallback images when all APIs fail
 function getFallbackImages() {
   return [{ 
-    title: "API keys not configured", 
+    title: "Static image", 
     imageLink: "/images/restaurant-1.jpg",
     thumbnailLink: "/images/restaurant-1.jpg",
     contextLink: "#",
