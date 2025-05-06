@@ -58,6 +58,35 @@ To set these in Vercel:
 
 For local development, create a `.env.local` file with these variables.
 
+## Environment Variables
+
+To enable image search functionality in both development and production, set up the following environment variables:
+
+### Required for Image APIs
+
+```
+# Google Custom Search API Keys
+GOOGLE_API_KEY=your_google_api_key
+GOOGLE_CSE_ID=your_google_cse_id
+
+# Unsplash API Keys
+UNSPLASH_ACCESS_KEY=your_unsplash_access_key
+```
+
+### Setting up on Vercel
+
+1. Go to your Vercel project dashboard
+2. Navigate to Settings > Environment Variables
+3. Add each key-value pair:
+   - `GOOGLE_API_KEY` - your Google API key
+   - `GOOGLE_CSE_ID` - your Google Custom Search Engine ID  
+   - `UNSPLASH_ACCESS_KEY` - your Unsplash access key
+4. Redeploy your application
+
+### Local Development
+
+For local development, create a `.env.local` file in the project root with these variables.
+
 ## Technologies Used
 
 - Next.js 15

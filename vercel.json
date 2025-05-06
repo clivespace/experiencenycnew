@@ -1,11 +1,9 @@
 {
-  "buildCommand": "npm run build",
-  "installCommand": "npm install --legacy-peer-deps",
   "framework": "nextjs",
-  "devCommand": "npm run dev",
-  "github": {
-    "silent": true
-  },
+  "buildCommand": "next build",
+  "devCommand": "next start",
+  "installCommand": "npm install",
+  "regions": ["iad1"],
   "env": {
     "GOOGLE_API_KEY": "@google_api_key",
     "GOOGLE_CSE_ID": "@google_cse_id",

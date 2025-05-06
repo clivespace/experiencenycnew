@@ -8,8 +8,8 @@ export function cn(...inputs: ClassValue[]) {
 
 // Default Google Search API configuration
 // In production, use environment variables instead of hardcoded values
-const GOOGLE_SEARCH_API_KEY = process.env.GOOGLE_SEARCH_API_KEY || 'AIzaSyDwstlEMfnItV34_h-nLO-GMSKN9vtwbL8';
-const GOOGLE_SEARCH_ENGINE_ID = process.env.GOOGLE_SEARCH_ENGINE_ID || '764bbc3a489a34eb6';
+const GOOGLE_SEARCH_API_KEY = process.env.GOOGLE_API_KEY || '';
+const GOOGLE_SEARCH_ENGINE_ID = process.env.GOOGLE_CSE_ID || '';
 
 // Schema for Google Search API response
 const GoogleSearchResultSchema = z.object({
@@ -72,8 +72,8 @@ export async function testGoogleSearch() {
  */
 export async function googleSearch(query: string): Promise<GoogleSearchResult[]> {
   try {
-    const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-    const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
+    const apiKey = process.env.GOOGLE_API_KEY;
+    const searchEngineId = process.env.GOOGLE_CSE_ID;
 
     if (!apiKey || !searchEngineId) {
       console.error('Missing Google Search API configuration');

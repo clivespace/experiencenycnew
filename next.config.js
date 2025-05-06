@@ -1,21 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Conditionally enable static export based on environment variable
+  // Only enable static export when explicitly requested
   ...(process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true' ? {
     output: 'export',
     distDir: 'out',
   } : {}),
   
-  // Enable API routes in dynamic mode
-  skipTrailingSlashRedirect: true,
+  // Enable trailing slashes for consistency
   trailingSlash: true,
   
-  // Allow processing of API routes
-  rewrites: async () => {
-    return [];
-  },
-  
-  pageExtensions: ['tsx', 'ts', 'jsx', 'js', 'md', 'mdx'],
   images: {
     domains: [
       'images.unsplash.com',
@@ -38,12 +31,12 @@ const nextConfig = {
         hostname: '**',
       }
     ],
-    unoptimized: process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true' // Enable image optimization in dynamic mode, but require unoptimized for static export
+    unoptimized: process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true'
   },
   env: {
-    GOOGLE_SEARCH_API_KEY: process.env.GOOGLE_API_KEY || '',
-    GOOGLE_SEARCH_ENGINE_ID: process.env.GOOGLE_CSE_ID || '',
-    NEXT_PUBLIC_STATIC_EXPORT: process.env.NEXT_PUBLIC_STATIC_EXPORT || 'false'
+    GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || '',
+    GOOGLE_CSE_ID: process.env.GOOGLE_CSE_ID || '',
+    UNSPLASH_ACCESS_KEY: process.env.UNSPLASH_ACCESS_KEY || ''
   }
 }
 
