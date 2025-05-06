@@ -1,5 +1,6 @@
 import { imageRequestQueue } from './request-queue';
 import { getFallbackRestaurantImages } from './fallback-images';
+import { searchRestaurantImages } from './image-search';
 
 // Types for restaurant data
 export interface Restaurant {
@@ -19,8 +20,7 @@ export interface Restaurant {
 }
 
 /**
- * Find a single restaurant image using Google image search
- * Use with fallback system for rate limits
+ * Find a single restaurant image using our optimized image search API
  */
 export async function findRestaurantImage(restaurantName: string, location: string, specificQuery?: string): Promise<string | null> {
   try {
@@ -30,13 +30,19 @@ export async function findRestaurantImage(restaurantName: string, location: stri
     
     console.log(`Searching for image: ${query}`);
     
-    // googleImageSearch removed; just return null or a fallback
-    return null;
-  } catch (error: any) {
-    console.error(`Error finding image for ${restaurantName}:`, error);
-    if (error.response && error.response.status === 429) {
-      console.log('Hit rate limit during image search, using fallback image');
+    // Use our new image search API that has built-in caching and fallbacks
+    const searchResults = await searchRestaurantImages(query);
+    
+    if (searchResults && searchResults.length > 0) {
+      // Return the first image URL
+      console.log(`Found image for ${restaurantName} (${specificQuery || 'general'})`);
+      return searchResults[0].imageLink;
     }
+    
+    console.log(`No image found for ${restaurantName} (${specificQuery || 'general'})`);
+    return null;
+  } catch (error) {
+    console.error(`Error finding image for ${restaurantName}:`, error);
     return null;
   }
 }
@@ -55,23 +61,18 @@ export async function findRestaurantImages(restaurant: Restaurant, location: str
       return getFallbackRestaurantImages('cosme');
     }
     
-    // First attempt: try to find real images using staggered searches
-    const imagePromises = [
-      findRestaurantImage(restaurant.name, location, "interior"),
-      findRestaurantImage(restaurant.name, location, "food"),
-      findRestaurantImage(restaurant.name, location, "exterior")
-    ];
+    // Use our new streamlined API to search for images
+    const searchResults = await searchRestaurantImages(`${restaurant.name} ${location} restaurant`);
     
-    // Wait for all image searches to complete
-    const images = await Promise.all(imagePromises);
-    
-    // Filter out nulls from failed searches
-    const validImages = images.filter(img => img !== null) as string[];
-    
-    // If we have at least one valid image, return them
-    if (validImages.length > 0) {
-      console.log(`Found ${validImages.length} valid images for ${restaurant.name}`);
-      return validImages;
+    // If we got results, convert them to image URLs
+    if (searchResults && searchResults.length > 0) {
+      const imageUrls = searchResults.map(result => 
+        // Use our image proxy for external images
+        `/api/image-proxy/image?url=${encodeURIComponent(result.imageLink)}`
+      );
+      
+      console.log(`Found ${imageUrls.length} images for ${restaurant.name}`);
+      return imageUrls;
     }
     
     // Fallback: use cuisine-based fallback images
@@ -158,4 +159,120 @@ export async function enhanceRestaurantsWithRealImages(
  */
 export function getInitialRestaurantImages(restaurant: Restaurant): string[] {
   return getFallbackRestaurantImages(restaurant.cuisine);
+}
+
+/**
+ * Fetches restaurant images using our image search API
+ * @param restaurantName The name of the restaurant
+ * @param count Number of images to return (default 3)
+ * @returns An array of image URLs
+ */
+export async function fetchRestaurantImages(restaurantName: string, count: number = 3): Promise<string[]> {
+  try {
+    // For Zero Otto Nove, directly use Italian restaurant images
+    if (restaurantName.toLowerCase().includes('zero otto nove')) {
+      console.log('Using direct Italian images for Zero Otto Nove');
+      return [
+        '/images/italian-1.jpg',
+        '/images/italian-2.jpg',
+        '/images/italian-3.jpg'
+      ];
+    }
+    
+    // Create a search query with the restaurant name
+    const searchQuery = `${restaurantName} restaurant`;
+    
+    // Use our image search API
+    const response = await fetch(`/api/image-proxy?q=${encodeURIComponent(searchQuery)}`);
+    
+    if (response.ok) {
+      const results = await response.json();
+      if (results && results.length > 0) {
+        // Map the image links through our proxy to avoid CORS issues
+        const imageUrls = results.slice(0, count).map((result: { imageLink: string }) => {
+          // For external images, use the proxy
+          if (result.imageLink.startsWith('http')) {
+            return `/api/image-proxy/image?url=${encodeURIComponent(result.imageLink)}`;
+          }
+          // For local images, use directly
+          return result.imageLink;
+        });
+        
+        // Ensure we have enough images by adding fallbacks if needed
+        const fallbacks = getFallbackImagesForRestaurant(restaurantName);
+        while (imageUrls.length < count) {
+          imageUrls.push(fallbacks[imageUrls.length % fallbacks.length]);
+        }
+        
+        return imageUrls;
+      }
+    }
+    
+    // If no images found or API error, return fallback images
+    return getFallbackImagesForRestaurant(restaurantName);
+  } catch (error) {
+    console.error(`Error fetching images for ${restaurantName}:`, error);
+    return getFallbackImagesForRestaurant(restaurantName);
+  }
+}
+
+/**
+ * Get fallback images for a restaurant based on name or cuisine
+ */
+function getFallbackImagesForRestaurant(restaurantName: string): string[] {
+  // Map of restaurant names to cuisines for common NYC restaurants
+  const restaurantToCuisine: Record<string, string> = {
+    'le bernardin': 'french',
+    'per se': 'french',
+    'eleven madison park': 'american',
+    'daniel': 'french',
+    'jean-georges': 'french',
+    'masa': 'japanese',
+    'blue hill': 'american',
+    'gramercy tavern': 'american',
+    'momofuku ko': 'japanese',
+    'del posto': 'italian',
+    'the modern': 'american',
+    'carbone': 'italian',
+    'peter luger': 'american',
+    'cosme': 'mexican',
+    'katz\'s delicatessen': 'american',
+    'the river café': 'american',
+    'balthazar': 'french',
+    'crown shy': 'american',
+    'zero otto nove': 'italian',
+  };
+  
+  // Try to determine the cuisine from the restaurant name
+  const lowerName = restaurantName.toLowerCase();
+  let cuisine = 'general';
+  
+  // Check if we have a specific mapping for this restaurant
+  if (restaurantToCuisine[lowerName]) {
+    cuisine = restaurantToCuisine[lowerName];
+  } else {
+    // Look for cuisine indicators in the name
+    if (lowerName.includes('italian') || lowerName.includes('pasta') || lowerName.includes('pizza')) {
+      cuisine = 'italian';
+    } else if (lowerName.includes('french') || lowerName.includes('bistro') || lowerName.includes('cafe')) {
+      cuisine = 'french';
+    } else if (lowerName.includes('japanese') || lowerName.includes('sushi') || lowerName.includes('ramen')) {
+      cuisine = 'japanese';
+    } else if (lowerName.includes('mexican') || lowerName.includes('taco') || lowerName.includes('burrito')) {
+      cuisine = 'mexican';
+    } else if (lowerName.includes('chinese') || lowerName.includes('dim sum')) {
+      cuisine = 'chinese';
+    } else if (lowerName.includes('thai')) {
+      cuisine = 'thai';
+    } else if (lowerName.includes('indian')) {
+      cuisine = 'indian';
+    }
+  }
+  
+  // Return cuisine-specific images from our public directory
+  return [
+    `/images/${cuisine}-1.jpg`,
+    `/images/${cuisine}-2.jpg`,
+    `/images/${cuisine}-3.jpg`
+  ];
 } 

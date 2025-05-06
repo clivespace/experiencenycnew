@@ -187,7 +187,7 @@ export default function RestaurantCarousel() {
             <div key={restaurant.id} className="snap-start">
               <RestaurantCard 
                 name={restaurant.name} 
-                image={restaurant.images?.[0] || restaurant.image} 
+                image={restaurant.image || restaurant.images?.[0] || "/images/restaurant-1.jpg"} 
                 description={restaurant.description || ''} 
               />
             </div>

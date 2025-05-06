@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { checkRestaurantStatus } from '@/lib/chat-helpers';
+import { formatDistanceToNow } from 'date-fns';
+
+// For server status monitoring
+
+export const dynamic = "force-static";
 
 /**
  * API endpoint to check if a restaurant is open or closed

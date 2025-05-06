@@ -9,7 +9,7 @@ interface RestaurantCardProps {
 
 export default function RestaurantCard({ name, image, description }: RestaurantCardProps) {
   // Default image if not provided
-  const defaultImage = "/images/placeholder-restaurant.jpg";
+  const defaultImage = "/images/restaurant-1.jpg";
   
   // State to track image loading errors
   const [imageError, setImageError] = useState(false);
@@ -20,15 +20,21 @@ export default function RestaurantCard({ name, image, description }: RestaurantC
       return defaultImage;
     }
     
-    // Check if this is an external URL
+    // Check if this is a remote URL that needs proxying
     if (image.startsWith('http')) {
       // For external images, use our proxy
-      return `/api/image-proxy?url=${encodeURIComponent(image)}`;
+      return `/api/image-proxy/image?url=${encodeURIComponent(image)}`;
     }
     
     // For internal images, use directly
     return image;
   };
+
+  // Determine if the image is an external URL
+  const isExternal = image?.startsWith('http');
+  
+  // Determine if we should use Next.js Image or regular img tag
+  const useNextImage = !isExternal || (isExternal && !imageError);
   
   return (
     <div className="min-w-[300px] max-w-[300px] bg-white rounded-lg overflow-hidden shadow-sm border-[0.1px] border-gray-200/30 flex-shrink-0 mx-2">
@@ -36,24 +42,13 @@ export default function RestaurantCard({ name, image, description }: RestaurantC
         <h3 className="font-medium text-lg">{name}</h3>
       </div>
       <div className="relative h-[180px] w-full">
-        {/* Use regular img tag for proxied images to avoid Next.js domain restrictions */}
-        {image && image.startsWith('http') ? (
-          <img 
-            src={getImageSrc()} 
-            alt={name} 
-            className="object-cover w-full h-full"
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          // Use Next.js Image for local images which are properly optimized
-          <Image 
-            src={getImageSrc()} 
-            alt={name} 
-            fill 
-            className="object-cover" 
-            onError={() => setImageError(true)}
-          />
-        )}
+        {/* Handle image display based on source */}
+        <img 
+          src={getImageSrc()} 
+          alt={name} 
+          className="object-cover w-full h-full"
+          onError={() => setImageError(true)}
+        />
       </div>
       <div className="p-4">
         <p className="text-sm text-gray-600">{description}</p>

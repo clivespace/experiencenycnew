@@ -4,6 +4,25 @@ import { googleSearch } from '@/lib/utils';
 import { ChatMessage } from '@/lib/openai';
 import { SOCIAL_CONCIERGE_SYSTEM_PROMPT, SOCIAL_CONCIERGE_EXAMPLE, checkRestaurantStatus } from '@/lib/chat-helpers';
 
+/**
+ * Chat API endpoint to interact with AI about NYC restaurants
+ *
+ * This API handles conversation with the OpenAI API and processes
+ * requests from the client-side chat UI. It includes additional
+ * context about NYC restaurants to provide helpful recommendations.
+ *
+ * Request format:
+ * {
+ *   messages: [
+ *     { role: "user", content: "Can you recommend an Italian restaurant?" }
+ *   ]
+ * }
+ *
+ * Response: AI response text with restaurant recommendations
+ */
+
+export const dynamic = "force-static";
+
 // Function to safely handle potentially large error objects for logging
 function sanitizeErrorForLogging(error: any): any {
   try {

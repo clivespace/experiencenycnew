@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { testGoogleSearch, googleSearch } from '@/lib/utils';
 
+export const dynamic = "force-static";
+
 export async function GET(request: Request) {
   try {
     // Parse the URL to get search query parameters

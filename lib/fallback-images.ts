@@ -32,45 +32,68 @@ function normalizeCuisine(cuisine: string): string {
     return 'korean';
   } else if (lowerCuisine.includes('american') || lowerCuisine.includes('burger') || lowerCuisine.includes('steak')) {
     return 'american';
+  } else if (lowerCuisine.includes('deli')) {
+    return 'american';
+  } else if (lowerCuisine.includes('steakhouse')) {
+    return 'american';
   }
   
   // Default to general restaurant images
   return 'general';
 }
 
+// Local static images available in the public directory
+// These are always accessible without API keys
+const localFallbackImages: Record<string, string[]> = {
+  italian: ['/images/italian-1.jpg', '/images/italian-2.jpg', '/images/italian-3.jpg'],
+  japanese: ['/images/japanese-1.jpg', '/images/japanese-2.jpg', '/images/japanese-3.jpg'],
+  mexican: ['/images/mexican-1.jpg', '/images/mexican-2.jpg', '/images/mexican-3.jpg'],
+  chinese: ['/images/chinese-1.jpg', '/images/chinese-2.jpg', '/images/chinese-3.jpg'],
+  thai: ['/images/thai-1.jpg', '/images/thai-2.jpg', '/images/thai-3.jpg'],
+  indian: ['/images/indian-1.jpg', '/images/indian-2.jpg', '/images/indian-3.jpg'],
+  french: ['/images/french-1.jpg', '/images/french-2.jpg', '/images/french-3.jpg'],
+  mediterranean: ['/images/restaurant-1.jpg', '/images/restaurant-2.jpg', '/images/restaurant-3.jpg'],
+  korean: ['/images/restaurant-1.jpg', '/images/restaurant-2.jpg', '/images/restaurant-3.jpg'],
+  american: ['/images/restaurant-1.jpg', '/images/restaurant-2.jpg', '/images/restaurant-3.jpg'],
+  general: ['/images/restaurant-1.jpg', '/images/restaurant-2.jpg', '/images/restaurant-3.jpg'],
+  cosme: ['/images/mexican-1.jpg', '/images/mexican-2.jpg', '/images/mexican-3.jpg'],
+  deli: ['/images/restaurant-1.jpg', '/images/restaurant-2.jpg', '/images/restaurant-3.jpg'],
+  steakhouse: ['/images/restaurant-1.jpg', '/images/restaurant-2.jpg', '/images/restaurant-3.jpg'],
+};
+
 /**
- * Curated fallback restaurant images by cuisine type
+ * Curated fallback restaurant images by cuisine type (for production)
  */
-const fallbackImages: Record<string, string[]> = {
+const unsplashFallbackImages: Record<string, string[]> = {
   // Italian restaurant images
   italian: [
-    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5',
-    'https://images.unsplash.com/photo-1498579397066-22750a3cb424',
-    'https://images.unsplash.com/photo-1534649643822-e7431de08af6',
-    'https://images.unsplash.com/photo-1579684947550-22e945225d9a',
+    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1498579397066-22750a3cb424?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1534649643822-e7431de08af6?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1579684947550-22e945225d9a?w=800&auto=format&fit=crop',
   ],
   
   // Japanese restaurant images
   japanese: [
-    'https://images.unsplash.com/photo-1611143669185-af224c5e3252',
-    'https://images.unsplash.com/photo-1580822184713-fc5400e7fe10',
-    'https://images.unsplash.com/photo-1579871494447-9811cf80d66c',
-    'https://images.unsplash.com/photo-1617196034183-421b4917c92d',
+    'https://images.unsplash.com/photo-1611143669185-af224c5e3252?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1580822184713-fc5400e7fe10?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1617196034183-421b4917c92d?w=800&auto=format&fit=crop',
   ],
   
   // Mexican restaurant images
   mexican: [
-    'https://images.unsplash.com/photo-1584314465196-31db4a57b2d9',
-    'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c',
-    'https://images.unsplash.com/photo-1599974579688-8dbdd335c77f',
-    'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b',
+    'https://images.unsplash.com/photo-1584314465196-31db4a57b2d9?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?w=800&auto=format&fit=crop',
   ],
   
   // Specific restaurant fallbacks
   cosme: [
-    'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c',
-    'https://images.unsplash.com/photo-1599974579688-8dbdd335c77f',
-    'https://images.unsplash.com/photo-1617197089406-9a0b89cc4eeb',
+    'https://images.unsplash.com/photo-1615870216519-2f9fa575fa5c?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1599974579688-8dbdd335c77f?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1617197089406-9a0b89cc4eeb?w=800&auto=format&fit=crop',
   ],
   
   // Chinese restaurant images
@@ -150,7 +173,14 @@ export type CuisineType = 'italian' | 'japanese' | 'mexican' | 'chinese' | 'thai
  */
 export function getFallbackRestaurantImages(cuisine: string = 'general'): string[] {
   const normalizedCuisine = normalizeCuisine(cuisine);
-  const images = fallbackImages[normalizedCuisine] || fallbackImages.general;
+  
+  // For local development, use local images from /public/images
+  if (process.env.NODE_ENV === 'development') {
+    return localFallbackImages[normalizedCuisine] || localFallbackImages.general;
+  }
+  
+  // For production, use Unsplash images
+  const images = unsplashFallbackImages[normalizedCuisine] || unsplashFallbackImages.general;
   
   // Ensure we return at least 3 images (repeat if necessary)
   if (images.length < 3) {

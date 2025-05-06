@@ -1,9 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  env: {
-    GOOGLE_SEARCH_API_KEY: 'AIzaSyDwstlEMfnItV34_h-nLO-GMSKN9vtwbL8',
-    GOOGLE_SEARCH_ENGINE_ID: '764bbc3a489a34eb6'
-  },
+  output: 'export',
+  distDir: 'out',
+  // Settings for static export
+  skipTrailingSlashRedirect: true,
+  trailingSlash: true,
   images: {
     domains: [
       'images.unsplash.com',
@@ -25,7 +26,12 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**',
       }
-    ]
+    ],
+    unoptimized: true // Required for static export
+  },
+  env: {
+    GOOGLE_SEARCH_API_KEY: 'AIzaSyDwstlEMfnItV34_h-nLO-GMSKN9vtwbL8',
+    GOOGLE_SEARCH_ENGINE_ID: '764bbc3a489a34eb6'
   }
 }
 

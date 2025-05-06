@@ -12,6 +12,8 @@ const openai = new OpenAI({
   },
 });
 
+export const dynamic = "force-static";
+
 export async function GET() {
   try {
     // Log the API key status (not the actual key)
