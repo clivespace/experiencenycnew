@@ -36,6 +36,28 @@ npm run build
 
 The static export can be deployed to any static hosting service such as GitHub Pages, Vercel, Netlify, or any web server.
 
+## API Keys Configuration for Image Search
+
+To enable image search functionality on Vercel, you need to set up the following environment variables in your Vercel project settings:
+
+1. **Google Custom Search API** (primary provider):
+   - `GOOGLE_API_KEY`: Your Google Cloud Platform API key with Custom Search API enabled
+   - `GOOGLE_CSE_ID`: Your Google Custom Search Engine ID
+
+2. **Unsplash API** (fallback provider):
+   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API access key
+
+3. **Dynamic Mode** (for API routes):
+   - `NEXT_PUBLIC_STATIC_EXPORT`: Set to `false` to enable dynamic API routes
+
+To set these in Vercel:
+1. Go to your project in the Vercel dashboard
+2. Navigate to Settings > Environment Variables
+3. Add each key-value pair
+4. Redeploy your application
+
+For local development, create a `.env.local` file with these variables.
+
 ## Technologies Used
 
 - Next.js 15

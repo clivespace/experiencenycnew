@@ -1,15 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  distDir: 'out',
-  // Settings for static export
+  // Remove static export options for dynamic API usage
+  // output: 'export',
+  // distDir: 'out',
+  
+  // Enable API routes
   skipTrailingSlashRedirect: true,
   trailingSlash: true,
-  // Prevent Next.js from processing API routes
+  
+  // Allow processing of API routes
   rewrites: async () => {
     return [];
   },
-  // Completely exclude the /api directory
+  
   pageExtensions: ['tsx', 'ts', 'jsx', 'js', 'md', 'mdx'],
   images: {
     domains: [
@@ -33,12 +36,12 @@ const nextConfig = {
         hostname: '**',
       }
     ],
-    unoptimized: true // Required for static export
+    unoptimized: false // Enable image optimization
   },
   env: {
-    GOOGLE_SEARCH_API_KEY: 'AIzaSyDwstlEMfnItV34_h-nLO-GMSKN9vtwbL8',
-    GOOGLE_SEARCH_ENGINE_ID: '764bbc3a489a34eb6',
-    NEXT_PUBLIC_STATIC_EXPORT: 'true'
+    GOOGLE_SEARCH_API_KEY: process.env.GOOGLE_API_KEY || '',
+    GOOGLE_SEARCH_ENGINE_ID: process.env.GOOGLE_CSE_ID || '',
+    NEXT_PUBLIC_STATIC_EXPORT: 'false'
   }
 }
 

@@ -42,16 +42,21 @@ export async function searchRestaurantImages(
       return getFallbackImages();
     }
     
-    // In static export mode or server components, use fallback images
+    // In server components, use direct API calls
     if (typeof window === 'undefined') {
-      return getFallbackImages();
+      try {
+        return await safeImageSearch(query, page);
+      } catch (serverErr) {
+        console.error('Server-side image search error:', serverErr);
+        return getFallbackImages();
+      }
     } 
     
-    // In client components with dynamic mode, use the API route (not available in static export)
+    // In client components with dynamic mode, use the API route
     try {
       const res = await fetch(
         `/api/image-proxy?q=${encodeURIComponent(query)}&page=${page}`,
-        { next: { revalidate: 3600 } } // Cache for 1 hour
+        { cache: 'no-store' } // Disable caching for dynamic content
       )
 
       if (!res.ok) {
@@ -90,8 +95,13 @@ export async function getRestaurantImageUrl(query: string): Promise<string> {
         return images[0].imageLink;
       }
       
-      // In dynamic mode, return through the proxy
-      return `/api/image-proxy/image?url=${encodeURIComponent(images[0].imageLink)}`
+      // Handle external URLs through the proxy
+      if (images[0].imageLink.startsWith('http')) {
+        return `/api/image-proxy/image?url=${encodeURIComponent(images[0].imageLink)}`
+      }
+      
+      // Local image paths can be used directly
+      return images[0].imageLink;
     }
     
     // Fallback to placeholder
@@ -107,13 +117,26 @@ export async function getRestaurantImageUrl(query: string): Promise<string> {
  * Provides a fallback when Google API reaches quota limits
  */
 const unsplashSearch = async (query: string, per = 10) => {
+  const unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
+  
+  if (!unsplashKey) {
+    throw new Error('Unsplash API key not configured');
+  }
+  
+  console.log(`Making Unsplash API request for: "${query}"`);
+  
   const res = await fetch(
     `https://api.unsplash.com/search/photos?` +
-      `client_id=${process.env.UNSPLASH_ACCESS_KEY}` +
+      `client_id=${unsplashKey}` +
       `&query=${encodeURIComponent(query)}` +
       `&per_page=${per}`
   );
-  if (!res.ok) throw new Error(`Unsplash error ${res.status}`);
+  
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => 'Unknown error');
+    throw new Error(`Unsplash error ${res.status}: ${errorText}`);
+  }
+  
   const data = await res.json() as { 
     results: Array<{
       description: string | null;
@@ -127,12 +150,19 @@ const unsplashSearch = async (query: string, per = 10) => {
       }
     }>
   };
+  
+  if (!data.results || data.results.length === 0) {
+    throw new Error('No results from Unsplash API');
+  }
+  
+  console.log(`Found ${data.results.length} Unsplash results for "${query}"`);
+  
   return data.results.map((img) => ({
     title: img.description ?? img.alt_description ?? "Unsplash image",
     imageLink: img.urls.raw,
     thumbnailLink: img.urls.thumb,
     contextLink: img.links.html,
-    source: 'unsplash'
+    source: 'unsplash' as const
   }));
 };
 
@@ -143,7 +173,9 @@ const unsplashSearch = async (query: string, per = 10) => {
  */
 const googleImageSearch = async (query: string, start = 1) => {
   // Check if API keys are available
-  const hasApiKeys = !!process.env.GOOGLE_API_KEY && !!process.env.GOOGLE_CSE_ID;
+  const googleApiKey = process.env.GOOGLE_API_KEY;
+  const googleCseId = process.env.GOOGLE_CSE_ID;
+  const hasApiKeys = !!googleApiKey && !!googleCseId;
   
   // Skip Google search if API keys are not available
   if (!hasApiKeys) {
@@ -165,10 +197,13 @@ const googleImageSearch = async (query: string, start = 1) => {
   console.log(`Fetching from Google CSE API: "${query}" (start: ${start})`);
   const url =
     `https://www.googleapis.com/customsearch/v1?` +
-    `key=${process.env.GOOGLE_API_KEY}` +
-    `&cx=${process.env.GOOGLE_CSE_ID}` +
+    `key=${googleApiKey}` +
+    `&cx=${googleCseId}` +
     `&q=${encodeURIComponent(query)}` +
     `&searchType=image&num=10&start=${start}`;
+  
+  console.log(`Using Google API keys: ${googleApiKey?.substring(0, 5)}...`);
+  
   const res = await fetch(url);
    
   // Handle quota exceeded (429) errors
@@ -193,34 +228,61 @@ const googleImageSearch = async (query: string, start = 1) => {
     }> 
   };
   
+  // Check if we got any results
+  if (!data.items || data.items.length === 0) {
+    throw new Error("No Google results found");
+  }
+  
   // Map the results
-  const results = data.items?.map((img) => ({
+  const results = data.items.map((img) => ({
     title: img.title,
     imageLink: img.link,
     thumbnailLink: img.image.thumbnailLink,
     contextLink: img.image.contextLink,
     source: 'google' as const
-  })) ?? [];
+  }));
   
-  // If no results, throw an error
-  if (results.length === 0) {
-    throw new Error(`No Google results found for query: "${query}"`);
-  }
-  
-  // Store the results in cache before returning
+  // Cache the results for future use
   cache.set(cacheKey, results);
+  
   return results;
 };
 
 // Fallback images when all APIs fail
-function getFallbackImages() {
-  return [{ 
-    title: "Static image", 
-    imageLink: "/images/restaurant-1.jpg",
-    thumbnailLink: "/images/restaurant-1.jpg",
-    contextLink: "#",
-    source: 'fallback' as const
-  }];
+function getFallbackImages(): ImageResult[] {
+  console.log('Using static fallback images');
+  
+  // Return multiple different images as fallback
+  return [
+    { 
+      title: "New York Restaurant", 
+      imageLink: "/images/restaurant-1.jpg",
+      thumbnailLink: "/images/restaurant-1.jpg",
+      contextLink: "#",
+      source: 'fallback' as const
+    },
+    { 
+      title: "French Restaurant", 
+      imageLink: "/images/french-1.jpg",
+      thumbnailLink: "/images/french-1.jpg",
+      contextLink: "#",
+      source: 'fallback' as const
+    },
+    { 
+      title: "Italian Restaurant", 
+      imageLink: "/images/italian-1.jpg",
+      thumbnailLink: "/images/italian-1.jpg",
+      contextLink: "#",
+      source: 'fallback' as const
+    },
+    { 
+      title: "Japanese Restaurant", 
+      imageLink: "/images/japanese-1.jpg",
+      thumbnailLink: "/images/japanese-1.jpg",
+      contextLink: "#",
+      source: 'fallback' as const
+    }
+  ];
 }
 
 /**
@@ -228,58 +290,82 @@ function getFallbackImages() {
  * Tries Google first, falls back to Unsplash on quota issues
  */
 export const safeImageSearch = async (query: string, start = 1) => {
+  // Create enhanced query for restaurant images
+  const enhancedQuery = query.includes('restaurant') ? query : `${query} restaurant`;
+  
   try {
     // Check if Google API keys are available
-    const hasGoogleApiKeys = !!process.env.GOOGLE_API_KEY && !!process.env.GOOGLE_CSE_ID;
+    const googleApiKey = process.env.GOOGLE_API_KEY;
+    const googleCseId = process.env.GOOGLE_CSE_ID;
+    const hasGoogleApiKeys = !!googleApiKey && !!googleCseId;
+    
     if (!hasGoogleApiKeys) {
-      console.log(`Skipping Google search and using Unsplash for "${query}" (no API keys)`);
+      console.log(`Skipping Google search and using Unsplash for "${enhancedQuery}" (no API keys)`);
       // Go directly to Unsplash if Google API keys aren't configured
       const per = Number(process.env.UNSPLASH_FALLBACK_PER_PAGE ?? 10);
       
       // Check if Unsplash API key is available
       if (process.env.UNSPLASH_ACCESS_KEY) {
         try {
-          const results = await unsplashSearch(query, per);
-          return results;
+          console.log(`Using Unsplash with access key: ${process.env.UNSPLASH_ACCESS_KEY?.substring(0, 5)}...`);
+          const results = await unsplashSearch(enhancedQuery, per);
+          
+          if (results.length > 0) {
+            return results;
+          }
+          
+          throw new Error('No Unsplash results found');
         } catch (unsplashErr) {
           console.error(`Unsplash search failed: ${unsplashErr}`);
           // Return fallback images
           return getFallbackImages();
         }
       } else {
+        console.log('No API keys available for either Google or Unsplash');
         // If no Unsplash key either, return fallback images
         return getFallbackImages();
       }
     }
     
     // If Google API keys are available, try Google first
-    return await googleImageSearch(query, start);          // primary provider
+    console.log(`Attempting Google image search for "${enhancedQuery}"`);
+    return await googleImageSearch(enhancedQuery, start);  // primary provider
   } catch (err: any) {
     console.warn(`Google search failed: ${err.message}`);
     
     if (err.message.includes("429") || err.message.includes("quota") || 
         err.message.includes("No Google results") || err.message.includes("API keys not configured")) {
       // Google quota hit or no results → use Unsplash
-      console.log(`Falling back to Unsplash for query: "${query}"`);
+      console.log(`Falling back to Unsplash for query: "${enhancedQuery}"`);
       const per = Number(process.env.UNSPLASH_FALLBACK_PER_PAGE ?? 10);
       
       // Check if Unsplash API key is available
       if (process.env.UNSPLASH_ACCESS_KEY) {
         try {
-          const results = await unsplashSearch(query, per);
+          console.log(`Using Unsplash with access key: ${process.env.UNSPLASH_ACCESS_KEY?.substring(0, 5)}...`);
+          const results = await unsplashSearch(enhancedQuery, per);
+          
           // Cache unsplash results too
-          cache.set(`${query}-${start}`, results);
-          return results;
+          if (results.length > 0) {
+            cache.set(`${enhancedQuery}-${start}`, results);
+            return results;
+          }
+          
+          console.log('No Unsplash results found either, using fallbacks');
+          return getFallbackImages();
         } catch (unsplashErr) {
           console.error(`Unsplash fallback also failed: ${unsplashErr}`);
           // Return placeholder as final fallback
           return getFallbackImages();
         }
       } else {
+        console.log('No Unsplash access key available');
         // If no Unsplash key either, return fallback images
         return getFallbackImages();
       }
     }
-    throw err; // unknown error, bubble up
+    
+    console.error(`Unhandled error in image search: ${err.message}`);
+    return getFallbackImages(); // Return fallbacks for any unexpected error
   }
 }; 
