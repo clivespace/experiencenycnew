@@ -31,7 +31,8 @@ const nextConfig = {
   },
   env: {
     GOOGLE_SEARCH_API_KEY: 'AIzaSyDwstlEMfnItV34_h-nLO-GMSKN9vtwbL8',
-    GOOGLE_SEARCH_ENGINE_ID: '764bbc3a489a34eb6'
+    GOOGLE_SEARCH_ENGINE_ID: '764bbc3a489a34eb6',
+    NEXT_PUBLIC_STATIC_EXPORT: 'true'
   }
 }
 

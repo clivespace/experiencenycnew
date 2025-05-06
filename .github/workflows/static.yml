@@ -42,6 +42,8 @@ jobs:
         run: mv app/api app/_api_disabled || echo "No API directory to move"
       - name: Build
         run: npm run build
+        env:
+          NEXT_PUBLIC_STATIC_EXPORT: 'true'
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact

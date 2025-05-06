@@ -37,29 +37,45 @@ export async function searchRestaurantImages(
   }
 
   try {
+    // For static export, return fallback images directly
+    if (process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true') {
+      return getFallbackImages();
+    }
+    
     // Use direct access to the Google and Unsplash APIs when in a server component
     if (typeof window === 'undefined') {
-      // Direct server-side import of the relevant module
-      const { safeImageSearch } = require('@/app/api/image-proxy/route');
-      // Call the search function directly
-      return await safeImageSearch(query, (page - 1) * 10 + 1);
+      try {
+        // Try direct server-side import of the relevant module
+        const { safeImageSearch } = require('@/app/api/image-proxy/route');
+        // Call the search function directly
+        return await safeImageSearch(query, (page - 1) * 10 + 1);
+      } catch (err) {
+        // Fall back to static images if module import fails
+        return getFallbackImages();
+      }
     } 
     
     // In client components, use the API route
-    const res = await fetch(
-      `/api/image-proxy?q=${encodeURIComponent(query)}&page=${page}`,
-      { next: { revalidate: 3600 } } // Cache for 1 hour
-    )
+    try {
+      const res = await fetch(
+        `/api/image-proxy?q=${encodeURIComponent(query)}&page=${page}`,
+        { next: { revalidate: 3600 } } // Cache for 1 hour
+      )
 
-    if (!res.ok) {
-      console.error(`Image search error: ${res.status} ${res.statusText}`)
-      return []
+      if (!res.ok) {
+        console.error(`Image search error: ${res.status} ${res.statusText}`)
+        return getFallbackImages();
+      }
+
+      return await res.json()
+    } catch (fetchErr) {
+      // Handle fetch errors in client components
+      console.error('Fetch error:', fetchErr);
+      return getFallbackImages();
     }
-
-    return await res.json()
   } catch (error) {
     console.error('Error fetching restaurant images:', error)
-    return []
+    return getFallbackImages();
   }
 }
 
