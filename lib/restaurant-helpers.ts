@@ -115,9 +115,20 @@ export async function enhanceRestaurantsWithRealImages(
     // Process this batch concurrently
     const batchPromises = batch.map(async (restaurant) => {
       try {
-        // Use existing images if available
+        // If the restaurant already has images, keep them **only** when they
+        // appear to be real (external) images.  Local placeholder assets live
+        // under the `public/images` folder and start with "/images/".  Those
+        // are meant as fallbacks, so we should still attempt a real image
+        // search in that case.
         if (restaurant.images && restaurant.images.length > 0) {
-          return restaurant;
+          const hasRealRemoteImage = restaurant.images.some((url) => url.startsWith('http'));
+
+          // When at least one remote URL is already present we assume the
+          // restaurant was previously enriched and we can skip another search.
+          if (hasRealRemoteImage) {
+            return restaurant;
+          }
+          // Otherwise (only local placeholders) fall through to search.
         }
         
         // Skip image search if requested
