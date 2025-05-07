@@ -17,7 +17,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Image from "next/image"
 import { parseRestaurantData, type RestaurantRecommendation } from '@/lib/chat-helpers'
-import { fetchRestaurantImages } from '@/lib/restaurant-helpers'
+import { fetchRestaurantImages, fetchExpertRestaurantInfo } from '@/lib/restaurant-helpers'
+import { getFallbackRestaurantImages } from '@/lib/fallback-images'
 import { type Message } from 'ai'
 
 interface UnifiedChatInterfaceProps {
@@ -284,6 +285,9 @@ const RestaurantDetailCard = ({ restaurantName }: { restaurantName: string }) =>
             // Default hours if not provided
             const defaultHours = "5:00 PM - 10:00 PM";
             
+            // Fetch expert review info (rating, summary, official site)
+            const expertInfo = await fetchExpertRestaurantInfo(restaurantName, found.location || 'New York');
+            
             // Fetch restaurant images using our helper function
             let restaurantImages = found.images || [];
             
@@ -309,11 +313,11 @@ const RestaurantDetailCard = ({ restaurantName }: { restaurantName: string }) =>
               cuisine: found.cuisine || "Contemporary American",
               location: found.neighborhood || found.location || "Flatiron District",
               priceRange: found.priceRange || "$",
-              rating: found.rating || 4.9,
+              rating: expertInfo.rating || found.rating || 4.9,
               image: found.image || found.imageUrl || restaurantImages[0] || "/images/restaurant-1.jpg",
               images: restaurantImages,
-              description: found.description || "Sophisticated tasting menus featuring seasonal ingredients in an art deco space with stunning views.",
-              website: websiteUrl,
+              description: expertInfo.summary || found.description || "Sophisticated tasting menus featuring seasonal ingredients in an art deco space with stunning views.",
+              website: expertInfo.website || websiteUrl,
               hours: found.hours || found.openHours || defaultHours,
               isOpen,
               status
@@ -344,17 +348,21 @@ const RestaurantDetailCard = ({ restaurantName }: { restaurantName: string }) =>
             
             const websiteUrl = `https://${restaurantSlug}.com`;
             
+            // Fetch expert review info
+            const expertInfo = await fetchExpertRestaurantInfo(restaurantName);
             // Fetch images for the restaurant using our helper
             const restaurantImages = await fetchRestaurantImages(restaurantName);
             
             setRestaurant(prev => ({
               ...prev,
               name: restaurantName,
-              website: websiteUrl,
+              website: expertInfo.website || websiteUrl,
               isOpen,
               status,
               images: restaurantImages,
-              image: restaurantImages[0]
+              image: restaurantImages[0],
+              description: expertInfo.summary || prev.description,
+              rating: expertInfo.rating || prev.rating
             }));
           }
         }
@@ -410,8 +418,9 @@ const RestaurantDetailCard = ({ restaurantName }: { restaurantName: string }) =>
                     ? img // Already proxied
                     : `/api/image-proxy/image?url=${encodeURIComponent(img)}`; // Need proxy
                   
-                // Default fallback image specific to Zero Otto Nove (Italian restaurant)
-                const fallbackImg = `/images/italian-${index + 1}.jpg`;
+                // Use helper to obtain cuisine-appropriate fallback images that are guaranteed to exist
+                const fallbackList = getFallbackRestaurantImages(restaurant.cuisine);
+                const fallbackImg = fallbackList[index % fallbackList.length];
                 
                 return (
                   <div key={index} className="w-1/3 h-24 relative rounded-md overflow-hidden border border-gray-200/30">

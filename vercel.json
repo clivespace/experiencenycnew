@@ -5,8 +5,8 @@
   "installCommand": "npm install",
   "regions": ["iad1"],
   "env": {
-    "GOOGLE_API_KEY": "@google_api_key",
-    "GOOGLE_CSE_ID": "@google_cse_id",
-    "UNSPLASH_ACCESS_KEY": "@unsplash_access_key"
+    "GOOGLE_API_KEY": "AIzaSyDwstlEMfnItV34_h-nLO-GMSKN9vtwbL8",
+    "GOOGLE_CSE_ID": "764bbc3a489a34eb6",
+    "UNSPLASH_ACCESS_KEY": "DolgUTFJGYtd1fHNst-2KDNa5-qhOhY9yO_ou7X_-Xo"
   }
 } 

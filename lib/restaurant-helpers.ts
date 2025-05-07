@@ -1,6 +1,7 @@
 import { imageRequestQueue } from './request-queue';
 import { getFallbackRestaurantImages } from './fallback-images';
 import { searchRestaurantImages } from './image-search';
+import { googleSearch } from './utils';
 
 // Types for restaurant data
 export interface Restaurant {
@@ -54,12 +55,7 @@ export async function findRestaurantImages(restaurant: Restaurant, location: str
   try {
     console.log(`Finding images for ${restaurant.name} in ${location}`);
     
-    // Check for specific restaurant name fallbacks first
-    const restaurantNameLower = restaurant.name.toLowerCase();
-    if (restaurantNameLower === 'cosme') {
-      console.log(`Using dedicated fallback images for ${restaurant.name}`);
-      return getFallbackRestaurantImages('cosme');
-    }
+    // No special-case skip: allow real image search for all restaurants
     
     // Use our new streamlined API to search for images
     const searchResults = await searchRestaurantImages(`${restaurant.name} ${location} restaurant`);
@@ -135,18 +131,18 @@ export async function enhanceRestaurantsWithRealImages(
         if (shouldSkipImageSearch) {
           // Use fallback images
           const fallbackImages = getFallbackRestaurantImages(restaurant.cuisine);
-          return { ...restaurant, images: fallbackImages };
+          return { ...restaurant, images: fallbackImages, image: fallbackImages[0] };
         }
         
         // Otherwise find images
         const images = await findRestaurantImages(restaurant, location);
-        return { ...restaurant, images };
+        return { ...restaurant, images, image: images[0] };
       } catch (error) {
         console.error(`Error enhancing restaurant ${restaurant.name}:`, error);
         
         // Use fallback images if anything goes wrong
         const fallbackImages = getFallbackRestaurantImages(restaurant.cuisine);
-        return { ...restaurant, images: fallbackImages };
+        return { ...restaurant, images: fallbackImages, image: fallbackImages[0] };
       }
     });
     
@@ -286,4 +282,50 @@ function getFallbackImagesForRestaurant(restaurantName: string): string[] {
     `/images/${cuisine}-2.jpg`,
     `/images/${cuisine}-3.jpg`
   ];
+}
+
+/**
+ * Fetch expert review info (rating, summary, website) for a restaurant
+ * Uses Google Custom Search snippets from reputable sources (Michelin, NYTimes, etc.)
+ */
+export async function fetchExpertRestaurantInfo(name: string, location: string = 'New York'): Promise<{ rating?: number; summary?: string; website?: string }> {
+  try {
+    const query = `${name} ${location} restaurant reviews`;
+    const results = await googleSearch(query);
+
+    if (!results || results.length === 0) {
+      return {};
+    }
+
+    // Attempt to pick the first result that looks like an official site for website
+    const officialSite = results.find(r => {
+      const url = r.link || '';
+      const domain = url.replace(/^https?:\/\//, '').split('/')[0];
+      return (
+        domain.includes(name.toLowerCase().replace(/[^a-z0-9]/g, '')) &&
+        !/yelp|tripadvisor|opentable|grubhub|ubereats|doordash/.test(domain)
+      );
+    });
+
+    const website = officialSite?.link;
+
+    // Try to extract a star rating from any snippet (e.g. "4.6/5" or "4.6 out of 5")
+    let rating: number | undefined;
+    for (const r of results) {
+      const match = r.snippet.match(/(\d\.\d)\s*(?:\/|out of)\s*5/);
+      if (match) {
+        rating = parseFloat(match[1]);
+        break;
+      }
+    }
+
+    // Use the first reputable snippet as summary (Michelin, NYTimes, Eater, etc.)
+    const reputable = results.find(r => /michelin|nytimes|new york times|newyorker|eater/.test(r.link.toLowerCase()));
+    const summary = reputable?.snippet || results[0].snippet;
+
+    return { rating, summary, website };
+  } catch (err) {
+    console.error('Error fetching expert info:', err);
+    return {};
+  }
 } 
